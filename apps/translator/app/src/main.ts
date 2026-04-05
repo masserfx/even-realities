@@ -1037,11 +1037,8 @@ async function sendComicRequest(message: string): Promise<void> {
   }
 }
 
-let comicPlaying = false
-
 async function playComic(): Promise<void> {
   comicPaused = false
-  comicPlaying = true
   for (let i = 0; i < comicScenes.length; i++) {
     // Wait while paused
     while (comicPaused) await new Promise(r => setTimeout(r, 200))
@@ -1067,7 +1064,6 @@ async function playComic(): Promise<void> {
       await new Promise(r => setTimeout(r, 3000))
     }
   }
-  comicPlaying = false
 }
 
 /** Wait until TTS queue is drained and audio finishes playing */
@@ -2118,148 +2114,6 @@ function detectTTSLang(text: string): string {
   // Chinese (CJK without kana = Chinese)
   if (/[\u4e00-\u9fff]{2,}/.test(text)) return 'zh-CN'
   return 'en-US'
-}
-
-// ── Auto-demo ──────────────────────────────────────────────────────
-
-async function runAutoDemo(): Promise<void> {
-  const wait = (ms: number) => new Promise(r => setTimeout(r, ms))
-  await wait(2000)
-
-  // === TRANSLATE MODE ===
-  mode = 'TRANSLATE'
-
-  const translations = [
-    { text: 'Excuse me, is this seat taken?', from: 'en', to: 'cs', si: 2, ti: 0 },
-    { text: 'Kde je nejbližší stanice metra?', from: 'cs', to: 'en', si: 1, ti: 1 },
-    { text: 'Je voudrais un café et un croissant, s\'il vous plaît.', from: 'fr', to: 'cs', si: 4, ti: 0 },
-  ]
-
-  for (const t of translations) {
-    sourceIndex = t.si; targetIndex = t.ti
-    setState('IDLE'); await wait(1000)
-
-    // Simulate listening — speak the original text aloud
-    setState('LISTENING')
-    await speak(t.text, langCodeToTTS(t.from))
-    await wait(1000)
-
-    setState('TRANSLATING')
-    try {
-      const res = await fetch(`${BACKEND}/stream`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: t.text, from: t.from, to: t.to }),
-      })
-      const data = await res.json() as { original?: string; translated?: string }
-      lastOriginalText = data.original ?? t.text
-      lastTranslatedText = data.translated ?? ''
-    } catch { lastOriginalText = t.text; lastTranslatedText = '(error)' }
-
-    setState('RESULT')
-    await wait(1000)
-    // Speak the translation
-    await speak(lastTranslatedText, langCodeToTTS(t.to))
-    await wait(2500)
-  }
-
-  // === CHAT MODE ===
-  mode = 'CHAT'
-  setState('IDLE'); await wait(1500)
-
-  const questions = [
-    { q: 'What are 3 must-see places in Tokyo?', lang: 'en' },
-    { q: 'Kolik je 1250 CZK v eurech?', lang: 'cs' },
-    { q: 'How do you say cheers in Japanese?', lang: 'en' },
-  ]
-
-  for (const { q, lang } of questions) {
-    // Speak the question
-    setState('LISTENING')
-    await speak(q, langCodeToTTS(lang))
-    await wait(1000)
-
-    lastOriginalText = q
-    setState('TRANSLATING')
-    try {
-      const res = await fetch(`${BACKEND}/chat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: q }),
-      })
-      const data = await res.json() as { response?: string }
-      lastTranslatedText = data.response ?? ''
-    } catch { lastTranslatedText = '(error)' }
-
-    setState('RESULT')
-    await wait(1000)
-    // Speak the AI response
-    await speak(lastTranslatedText, langCodeToTTS(lang))
-    await wait(2500)
-  }
-
-  // Back to idle
-  mode = 'TRANSLATE'
-  setState('IDLE')
-  console.log('[G2] Auto-demo finished')
-}
-
-// ── Polyglot demo ──────────────────────────────────────────────────
-
-async function runPolyglotDemo(): Promise<void> {
-  const wait = (ms: number) => new Promise(r => setTimeout(r, ms))
-  const original = 'Jmenuji se Leoš a jsem AI developer.'
-
-  const targets = [
-    { code: 'en', label: 'EN', ti: 1 },
-    { code: 'de', label: 'DE', ti: 2 },
-    { code: 'fr', label: 'FR', ti: 3 },
-    { code: 'es', label: 'ES', ti: 4 },
-    { code: 'ja', label: 'JA', ti: 5 },
-    { code: 'ko', label: 'KO', ti: 6 },
-    { code: 'zh', label: 'ZH', ti: 7 },
-  ]
-
-  mode = 'TRANSLATE'
-  sourceIndex = 1 // CS
-
-  await wait(1500)
-
-  // First speak the original in Czech
-  lastOriginalText = original
-  lastTranslatedText = original
-  targetIndex = 0 // CS
-  setState('RESULT')
-  await speak(original, 'cs-CZ')
-  await wait(1500)
-
-  for (const t of targets) {
-    targetIndex = t.ti
-    setState('TRANSLATING')
-    await wait(500)
-
-    try {
-      const res = await fetch(`${BACKEND}/stream`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: original, from: 'cs', to: t.code }),
-      })
-      const data = await res.json() as { original?: string; translated?: string }
-      lastOriginalText = original
-      lastTranslatedText = data.translated ?? ''
-    } catch {
-      lastOriginalText = original
-      lastTranslatedText = '(error)'
-    }
-
-    setState('RESULT')
-    await wait(500)
-    await speak(lastTranslatedText, langCodeToTTS(t.code))
-    await wait(2000)
-  }
-
-  setState('IDLE')
-  console.log('[G2] Polyglot demo finished')
 }
 
 // ── Boot ────────────────────────────────────────────────────────────
