@@ -370,8 +370,8 @@ function buildTextContainers(): TextContainerProperty[] {
       break
   }
 
-  // Paginate long content
-  if (contentText.length > GLASSES_PAGE_CHARS) {
+  // Paginate long content (teleprompter handles its own windowing — skip pagination)
+  if (mode !== 'PROMPTER' && contentText.length > GLASSES_PAGE_CHARS) {
     const totalPages = getGlassesPageCount(contentText)
     const activePage = glassesPage === -1 ? totalPages - 1 : Math.min(glassesPage, totalPages - 1)
     contentText = getGlassesPageText(contentText, activePage)
@@ -1149,18 +1149,67 @@ async function showResult(): Promise<void> {
 
 // ── Teleprompter ────────────────────────────────────────────────────
 
+/** Wrap words into lines of at most maxChars characters. Called once per text. */
+function wrapPrompterWords(words: string[], maxChars: number): string[][] {
+  const lines: string[][] = [[]]
+  let lineLen = 0
+  for (const word of words) {
+    if (lineLen > 0 && lineLen + 1 + word.length > maxChars) {
+      lines.push([])
+      lineLen = 0
+    }
+    lines[lines.length - 1].push(word)
+    lineLen += (lineLen > 0 ? 1 : 0) + word.length
+  }
+  return lines
+}
+
+/**
+ * Returns 3 fixed-width lines for the teleprompter display.
+ * The current word is always on the middle line — words within each line
+ * never reflow, only the [brackets] move forward within that line.
+ * The display scrolls by one full line only when the current word crosses
+ * a line boundary, keeping the reading position stable.
+ */
 function getPrompterDisplayText(): string {
   if (prompterWords.length === 0) return ''
-  // Sliding window: a few words before current + words ahead to fill ~3 lines
-  const windowStart = Math.max(0, prompterWordIndex - 3)
-  const windowEnd = Math.min(prompterWords.length, prompterWordIndex + 18)
-  return prompterWords
-    .slice(windowStart, windowEnd)
-    .map((w, i) => {
-      const absIdx = windowStart + i
-      return absIdx === prompterWordIndex ? `[${w}]` : w
-    })
-    .join(' ')
+
+  // ~32 chars per line fits the glasses display comfortably
+  const CHARS_PER_LINE = 32
+  const lines = wrapPrompterWords(prompterWords, CHARS_PER_LINE)
+
+  // Find which line and offset-within-line the current word is on
+  let wordCount = 0
+  let currentLine = 0
+  for (let li = 0; li < lines.length; li++) {
+    if (wordCount + lines[li].length > prompterWordIndex) {
+      currentLine = li
+      break
+    }
+    wordCount += lines[li].length
+  }
+
+  // Show: line above current (context), current line, line below (lookahead)
+  const startLine = Math.max(0, currentLine - 1)
+  const endLine = Math.min(lines.length, startLine + 3)
+
+  // Global word index at startLine start
+  let globalIdx = 0
+  for (let li = 0; li < startLine; li++) globalIdx += lines[li].length
+
+  const displayLines: string[] = []
+  for (let li = startLine; li < endLine; li++) {
+    const lineWords = lines[li].map((w, i) =>
+      globalIdx + i === prompterWordIndex ? `[${w}]` : w
+    )
+    displayLines.push(lineWords.join(' '))
+    globalIdx += lines[li].length
+  }
+
+  // Pad to always 3 lines so the display height stays constant
+  while (displayLines.length < 3) displayLines.push('')
+
+  return displayLines.join('\n')
 }
 
 function startPrompter(): void {
