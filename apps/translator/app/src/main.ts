@@ -103,7 +103,7 @@ let prompterWords: string[] = []
 let prompterWordIndex = 0
 let prompterRunning = false
 let prompterInterval: number | null = null
-let prompterSpeed = 4           // 1=slow … 10=fast
+let prompterSpeed = 240         // WPM: 120–600, default 240
 
 // ── DOM elements ────────────────────────────────────────────────────
 
@@ -152,6 +152,7 @@ const elBtnPrompterMode = document.getElementById('btn-prompter-mode')!
 const elPrompterInput = document.getElementById('prompter-input')!
 const elPrompterText = document.getElementById('prompter-text') as HTMLTextAreaElement
 const elPrompterSpeed = document.getElementById('prompter-speed') as HTMLInputElement
+const elPrompterSpeedLabel = document.getElementById('prompter-speed-label')!
 const elBtnPrompterStart = document.getElementById('btn-prompter-start')!
 
 // ── Helpers ─────────────────────────────────────────────────────────
@@ -359,7 +360,7 @@ function buildTextContainers(): TextContainerProperty[] {
     case 'RESULT':
       if (mode === 'PROMPTER') {
         contentText = getPrompterDisplayText()
-        footerText = `${prompterWordIndex + 1}/${prompterWords.length}${prompterRunning ? '' : ' \u23F8'}`
+        footerText = `${prompterWordIndex + 1}/${prompterWords.length} \u00B7 ${prompterSpeed}wpm${prompterRunning ? '' : ' \u23F8'}`
       } else {
         contentText = lastTranslatedText || ''
         if (mode === 'COMIC' && comicScenes.length > 0) {
@@ -1174,8 +1175,8 @@ function wrapPrompterWords(words: string[], maxChars: number): string[][] {
 function getPrompterDisplayText(): string {
   if (prompterWords.length === 0) return ''
 
-  // ~32 chars per line fits the glasses display comfortably
-  const CHARS_PER_LINE = 32
+  // 58 chars per line matches the G2 display width (576px monospace)
+  const CHARS_PER_LINE = 58
   const lines = wrapPrompterWords(prompterWords, CHARS_PER_LINE)
 
   // Find which line and offset-within-line the current word is on
@@ -1218,7 +1219,7 @@ function startPrompter(): void {
   prompterWords = text.split(/\s+/).filter(Boolean)
   prompterWordIndex = 0
   prompterRunning = true
-  prompterSpeed = parseInt(elPrompterSpeed.value, 10) || 4
+  prompterSpeed = parseInt(elPrompterSpeed.value, 10) || 240
   state = 'RESULT'
   updateWebUI()
   void updateGlassesDisplay()
@@ -1252,7 +1253,8 @@ function pauseResumePrompter(): void {
 
 function schedulePrompterAdvance(): void {
   if (prompterInterval !== null) clearInterval(prompterInterval)
-  const msPerStep = Math.round(3000 / Math.max(1, prompterSpeed))
+  const wpm = Math.max(120, Math.min(600, prompterSpeed))
+  const msPerStep = Math.max(80, Math.floor(60000 / wpm))
   prompterInterval = window.setInterval(() => {
     if (!prompterRunning) return
     if (prompterWordIndex >= prompterWords.length - 1) {
@@ -1341,10 +1343,11 @@ function handleClick(): void {
 }
 
 function handleScrollUp(): void {
-  // Prompter mode: scroll up = faster
+  // Prompter mode: scroll up = faster (+30 WPM)
   if (mode === 'PROMPTER' && state === 'RESULT') {
-    prompterSpeed = Math.min(10, prompterSpeed + 1)
+    prompterSpeed = Math.min(600, prompterSpeed + 30)
     elPrompterSpeed.value = String(prompterSpeed)
+    elPrompterSpeedLabel.textContent = `${prompterSpeed} WPM`
     if (prompterRunning) schedulePrompterAdvance()
     return
   }
@@ -1374,10 +1377,11 @@ function handleScrollUp(): void {
 }
 
 function handleScrollDown(): void {
-  // Prompter mode: scroll down = slower
+  // Prompter mode: scroll down = slower (-30 WPM)
   if (mode === 'PROMPTER' && state === 'RESULT') {
-    prompterSpeed = Math.max(1, prompterSpeed - 1)
+    prompterSpeed = Math.max(120, prompterSpeed - 30)
     elPrompterSpeed.value = String(prompterSpeed)
+    elPrompterSpeedLabel.textContent = `${prompterSpeed} WPM`
     if (prompterRunning) schedulePrompterAdvance()
     return
   }
@@ -1555,7 +1559,8 @@ function setupWebControls(): void {
     }
   })
   elPrompterSpeed.addEventListener('input', () => {
-    prompterSpeed = parseInt(elPrompterSpeed.value, 10) || 4
+    prompterSpeed = parseInt(elPrompterSpeed.value, 10) || 240
+    elPrompterSpeedLabel.textContent = `${prompterSpeed} WPM`
     if (prompterRunning) schedulePrompterAdvance()
   })
 
