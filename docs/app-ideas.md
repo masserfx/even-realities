@@ -24,14 +24,14 @@
   - Trh: 60 mld USD (jazykové služby), Meta Ray-Ban top 3 funkce
   - Status: základní verze hotová (push + live mode, Whisper + GPT)
 
-- [ ] **2. Navigace se šipkami v zorném poli** ⭐ 4.8
+- [ ] **2. Navigace se šipkami v zorném poli** ⭐ 4.8 — `PLANNED` ([plan-navigation.md](plan-navigation.md))
   - Turn-by-turn navigace pro pěší, cyklisty, řidiče
   - Cílová skupina: cestovatelé, kurýři, cyklisté
   - Výhoda brýlí: -34% kognitivní zátěž vs. telefon (University of Michigan)
   - Trh: 30 mld USD, Amazon nasadil pro doručovatele, 85% uživatelů chce
   - Implementace: Google Maps API / Mapbox → šipky + vzdálenost na HUD
 
-- [ ] **3. Titulky pro neslyšící a nedoslýchavé** ⭐ 4.8
+- [x] **3. Titulky pro neslyšící a nedoslýchavé** ⭐ 4.8 — `IMPLEMENTED`
   - Živý přepis řeči do textu v zorném poli
   - Cílová skupina: 1,5 mld lidí se ztrátou sluchu (WHO)
   - Výhoda brýlí: jediná forma kde text neruší oční kontakt
@@ -45,14 +45,14 @@
   - Trh: AI asistenti nejrychleji rostoucí segment
   - Status: základní verze hotová (chat mode s GPT-4.1)
 
-- [ ] **5. Teleprompter pro řečníky** ⭐ 4.7
+- [x] **5. Teleprompter pro řečníky** ⭐ 4.7 — `IMPLEMENTED`
   - Neviditelný teleprompter — text plyne v zorném poli
   - Cílová skupina: CEO, lektoři, YouTubeři, politici
   - Výhoda brýlí: JEDINÉ zařízení kde to funguje neviditelně
   - Trh: Even G2 již propaguje, Meta přidala na CES 2026
   - Implementace: PDF/TXT import → auto-scroll s nastavitelnou rychlostí
 
-- [ ] **6. Sportovní HUD metriky** ⭐ 4.7
+- [ ] **6. Sportovní HUD metriky** ⭐ 4.7 — `PLANNED` ([plan-sports-hud.md](plan-sports-hud.md))
   - Tepová frekvence, rychlost, kadence, vzdálenost v zorném poli
   - Cílová skupina: cyklisté, běžci, vytrvalostní sportovci
   - Výhoda brýlí: oči na cestě, -5-8% vnímaná námaha

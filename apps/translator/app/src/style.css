@@ -181,13 +181,15 @@ body {
 /* ── Glass buttons ───────────────────────────────────────────── */
 
 #mode-switcher,
-#live-toggle {
+#live-toggle,
+#captions-toggle {
   display: flex;
   gap: 6px;
 }
 
 #mode-switcher button,
-#live-toggle button {
+#live-toggle button,
+#captions-toggle button {
   flex: 1;
   background: var(--glass);
   backdrop-filter: blur(20px);
@@ -204,7 +206,7 @@ body {
 }
 
 #mode-switcher button.active,
-#live-toggle button.active {
+#live-toggle #btn-push-mode.active {
   background: var(--accent);
   color: #000;
   border-color: var(--accent);
@@ -212,8 +214,33 @@ body {
   box-shadow: 0 0 20px var(--accent-glow), inset 0 1px 0 rgba(255,255,255,0.2);
 }
 
+#live-toggle #btn-live-mode.active {
+  background: var(--live-color);
+  color: #000;
+  border-color: var(--live-color);
+  font-weight: 600;
+  box-shadow: 0 0 20px rgba(255,119,0,0.3), inset 0 1px 0 rgba(255,255,255,0.2);
+}
+
+#captions-toggle #btn-translate-mode-live.active {
+  background: var(--accent);
+  color: #000;
+  border-color: var(--accent);
+  font-weight: 600;
+  box-shadow: 0 0 20px var(--accent-glow), inset 0 1px 0 rgba(255,255,255,0.2);
+}
+
+#captions-toggle #btn-captions-mode.active {
+  background: var(--live-color);
+  color: #000;
+  border-color: var(--live-color);
+  font-weight: 600;
+  box-shadow: 0 0 20px rgba(255,119,0,0.3), inset 0 1px 0 rgba(255,255,255,0.2);
+}
+
 #mode-switcher button:active,
-#live-toggle button:active {
+#live-toggle button:active,
+#captions-toggle button:active {
   transform: scale(0.96);
 }
 
@@ -541,6 +568,50 @@ body {
   animation: pulse 1.5s ease-in-out infinite;
 }
 
+/* ── Usage panel ────────────────────────────────────────────── */
+
+#usage-panel {
+  margin-top: 8px;
+  padding: 10px;
+  background: var(--surface);
+  border-radius: 10px;
+  border: 1px solid var(--border);
+}
+
+#usage-content {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+.usage-section {
+  margin-bottom: 10px;
+}
+
+.usage-section h4 {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--dim);
+  margin-bottom: 4px;
+}
+
+.usage-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 2px 0;
+}
+
+.usage-row .label { color: var(--text-secondary); }
+.usage-row .value { color: var(--text); font-weight: 500; font-variant-numeric: tabular-nums; }
+.usage-row .value-accent { color: var(--accent); font-weight: 600; }
+
+.usage-total {
+  border-top: 1px solid var(--border);
+  padding-top: 6px;
+  margin-top: 6px;
+}
+
 /* ── History overlay ─────────────────────────────────────────── */
 
 #history-overlay {
@@ -834,4 +905,71 @@ body {
     height: 260px;
     flex: none;
   }
+}
+
+/* ── Teleprompter ─────────────────────────────────────────────── */
+
+#prompter-input {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+  background: var(--surface);
+  border-radius: 10px;
+  border: 1px solid var(--glass-border);
+}
+
+#prompter-text {
+  background: var(--surface-solid);
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 13px;
+  padding: 8px;
+  resize: vertical;
+  min-height: 80px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.2s ease;
+}
+
+#prompter-text:focus {
+  border-color: var(--accent);
+}
+
+#prompter-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+#prompter-controls label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+}
+
+#prompter-controls input[type="range"] {
+  flex: 1;
+  accent-color: var(--accent);
+}
+
+#btn-prompter-start {
+  background: var(--accent);
+  color: #000;
+  border: none;
+  border-radius: 8px;
+  padding: 6px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+#btn-prompter-start:active {
+  transform: scale(0.93);
 }

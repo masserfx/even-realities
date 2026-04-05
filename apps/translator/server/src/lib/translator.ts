@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 import { ollamaChat } from "./ollama.js";
+import { trackChat } from "./usage.js";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -42,10 +43,12 @@ export interface TranslationResult {
 
 async function callLLM(system: string, user: string): Promise<string> {
   if (currentEngine === 'ollama') {
-    return ollamaChat([
+    const result = await ollamaChat([
       { role: "system", content: system },
       { role: "user", content: user },
     ]);
+    trackChat('ollama', Math.ceil((system.length + user.length) / 4), Math.ceil(result.length / 4));
+    return result;
   }
 
   const response = await openai.chat.completions.create({
@@ -56,6 +59,15 @@ async function callLLM(system: string, user: string): Promise<string> {
       { role: "user", content: user },
     ],
   });
+  const usage = response.usage;
+  if (usage) {
+    trackChat(currentEngine, usage.prompt_tokens, usage.completion_tokens);
+  } else {
+    // Estimate tokens from text length (~4 chars per token)
+    const inputChars = system.length + user.length;
+    const outputChars = response.choices[0]?.message?.content?.length ?? 0;
+    trackChat(currentEngine, Math.ceil(inputChars / 4), Math.ceil(outputChars / 4));
+  }
   return response.choices[0]?.message?.content?.trim() ?? "";
 }
 
@@ -114,6 +126,7 @@ async function* callLLMStream(system: string, user: string): AsyncGenerator<stri
     model: currentEngine,
     max_tokens: 2048,
     stream: true,
+    stream_options: { include_usage: true },
     messages: [
       { role: 'system', content: system },
       { role: 'user', content: user },
@@ -122,6 +135,9 @@ async function* callLLMStream(system: string, user: string): AsyncGenerator<stri
   for await (const chunk of stream) {
     const delta = chunk.choices[0]?.delta?.content;
     if (delta) yield delta;
+    if (chunk.usage) {
+      trackChat(currentEngine, chunk.usage.prompt_tokens, chunk.usage.completion_tokens);
+    }
   }
 }
 

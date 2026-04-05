@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import OpenAI from "openai";
+import { trackTts } from "../lib/usage.js";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -23,6 +24,7 @@ ttsRoute.post("/tts", async (c) => {
       speed: speed ?? 1.3,
     });
 
+    trackTts(text.length);
     const buffer = Buffer.from(await response.arrayBuffer());
     return c.body(buffer, 200, {
       "Content-Type": "audio/mpeg",

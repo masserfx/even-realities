@@ -2,6 +2,7 @@ import OpenAI from "openai";
 import sharp from "sharp";
 // @ts-expect-error no types for upng-js
 import UPNG from "upng-js";
+import { trackImage } from "./usage.js";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -55,6 +56,7 @@ export async function generateComicImage(
 
   const b64 = response.data?.[0]?.b64_json;
   if (!b64) throw new Error("No image data returned");
+  trackImage(model);
   return Buffer.from(b64, "base64");
 }
 

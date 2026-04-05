@@ -1,5 +1,6 @@
 import OpenAI, { toFile } from "openai";
 import { createWavBuffer } from "./wav.js";
+import { trackWhisper } from "./usage.js";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -34,6 +35,12 @@ export async function transcribe(
     ...(language ? { language } : {}),
     response_format: "verbose_json",
   });
+
+  // Track usage — estimate duration from audio buffer size
+  // PCM 16kHz mono 16-bit = 32000 bytes/sec, WebM ~6000 bytes/sec
+  const bytesPerSec = format === "webm" ? 6000 : 32000;
+  const estimatedSeconds = audioBuffer.length / bytesPerSec;
+  trackWhisper(estimatedSeconds);
 
   return {
     text: response.text,

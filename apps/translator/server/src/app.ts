@@ -10,6 +10,7 @@ import { comicRoute } from "./routes/comic.js";
 import { ttsRoute } from "./routes/tts.js";
 import { historyRoute } from "./routes/history.js";
 import { imageTestRoute } from "./routes/image-test.js";
+import { usageRoute } from "./routes/usage.js";
 
 export const app = new Hono();
 
@@ -33,6 +34,7 @@ app.route("/api", comicRoute);
 app.route("/api", ttsRoute);
 app.route("/api", historyRoute);
 app.route("/api", imageTestRoute);
+app.route("/api", usageRoute);
 
 // Serve static files (image-test.html etc.)
 app.use("/public/*", serveStatic({ root: "./" }));

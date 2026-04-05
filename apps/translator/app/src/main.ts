@@ -15,7 +15,7 @@ import './style.css'
 // ── Types ───────────────────────────────────────────────────────────
 
 type AppState = 'IDLE' | 'LISTENING' | 'TRANSLATING' | 'RESULT'
-type AppMode = 'TRANSLATE' | 'CHAT' | 'COMIC'
+type AppMode = 'TRANSLATE' | 'CHAT' | 'COMIC' | 'PROMPTER'
 
 interface Language {
   code: string
@@ -81,18 +81,29 @@ let comicShowingImage = false // false = narration text, true = illustration
 let comicPaused = false       // pause comic playback
 let comicStyleId = 'ink'      // selected comic art style
 
-// Live TTS mute
-let liveTtsMuted = false
+// Global TTS mute — persisted in localStorage
+let ttsMuted = localStorage.getItem('ttsMuted') === 'true'
 
 // Live translation state
 let liveMode = false
+let captionsMode = false  // true = show transcription only (no translation)
 let liveStream: MediaStream | null = null
 let liveAudioContext: AudioContext | null = null
 let liveAnalyser: AnalyserNode | null = null
 let liveFullTranscript = ''       // accumulated transcript (shown on web)
 let liveFullTranslation = ''      // accumulated translation (shown on web)
+let liveChunkSeq = 0             // sequence number for ordering responses
+let liveNextExpected = 0         // next expected sequence to append
+const livePendingChunks = new Map<number, { original: string; translated: string }>()
 const CHUNK_DURATION_MS = 1500
 const VAD_THRESHOLD = 5           // average frequency amplitude threshold (low = sensitive)
+
+// Prompter state
+let prompterWords: string[] = []
+let prompterWordIndex = 0
+let prompterRunning = false
+let prompterInterval: number | null = null
+let prompterSpeed = 4           // 1=slow … 10=fast
 
 // ── DOM elements ────────────────────────────────────────────────────
 
@@ -119,17 +130,29 @@ const elComicPanels = document.getElementById('comic-panels')!
 const elLiveToggle = document.getElementById('live-toggle')!
 const elBtnPushMode = document.getElementById('btn-push-mode')!
 const elBtnLiveMode = document.getElementById('btn-live-mode')!
+const elCaptionsToggle = document.getElementById('captions-toggle')!
+const elBtnTranslateModeLive = document.getElementById('btn-translate-mode-live')!
+const elBtnCaptionsMode = document.getElementById('btn-captions-mode')!
 const elInputDeviceSelect = document.getElementById('input-device-select') as HTMLSelectElement
 const elOutputDeviceSelect = document.getElementById('output-device-select') as HTMLSelectElement
 const elBtnSelectOutput = document.getElementById('btn-select-output')!
 const elSaveHistoryToggle = document.getElementById('save-history-toggle') as HTMLInputElement
+const elTtsMuteToggle = document.getElementById('tts-mute-toggle') as HTMLInputElement
 const elStylePicker = document.getElementById('style-picker')!
 const elStyleGrid = document.getElementById('style-grid')!
+const elBtnShowUsage = document.getElementById('btn-show-usage')!
+const elUsagePanel = document.getElementById('usage-panel')!
+const elUsageContent = document.getElementById('usage-content')!
 const elHistoryOverlay = document.getElementById('history-overlay')!
 const elHistoryList = document.getElementById('history-list')!
 const elBtnOpenHistory = document.getElementById('btn-open-history')!
 const elBtnHistoryClose = document.getElementById('btn-history-close')!
 const elHistoryLangSelect = document.getElementById('history-lang-select') as HTMLSelectElement
+const elBtnPrompterMode = document.getElementById('btn-prompter-mode')!
+const elPrompterInput = document.getElementById('prompter-input')!
+const elPrompterText = document.getElementById('prompter-text') as HTMLTextAreaElement
+const elPrompterSpeed = document.getElementById('prompter-speed') as HTMLInputElement
+const elBtnPrompterStart = document.getElementById('btn-prompter-start')!
 
 // ── Helpers ─────────────────────────────────────────────────────────
 
@@ -139,18 +162,26 @@ function getTargetLang(): Language { return TARGET_LANGUAGES[targetIndex] }
 function getHeaderLabel(): string {
   if (mode === 'COMIC') return comicTitle || 'Comic Story'
   if (mode === 'CHAT') return 'AI Assistant'
+  if (mode === 'PROMPTER') return 'Teleprompter'
   return `${getSourceLang().label} \u2192 ${getTargetLang().label}`
 }
 
 function getStateLabel(): string {
   switch (state) {
-    case 'IDLE': return mode === 'CHAT' ? '\u23F0 Ask me' : mode === 'COMIC' ? '\u23F0 Comic Ready' : '\u23F0 Ready'
-    case 'LISTENING': return liveMode ? (liveTtsMuted ? '\u25CF LIVE \u2014 muted' : '\u25CF LIVE') : '\uD83D\uDD34 Listening'
+    case 'IDLE': {
+      const muteIcon = ttsMuted ? ' \uD83D\uDD07' : ''
+      return mode === 'CHAT' ? `\u23F0 Ask me${muteIcon}` : mode === 'COMIC' ? `\u23F0 Comic Ready${muteIcon}` : `\u23F0 Ready${muteIcon}`
+    }
+    case 'LISTENING': return liveMode ? (captionsMode ? '\u25CF CAPTIONS' : (ttsMuted ? '\u25CF LIVE \u2014 \uD83D\uDD07' : '\u25CF LIVE')) : '\uD83D\uDD34 Listening'
     case 'TRANSLATING': return mode === 'COMIC' ? '\u23F3 Creating comic...' : mode === 'CHAT' ? '\u23F3 Thinking' : '\u23F3 Translating'
     case 'RESULT':
       if (mode === 'COMIC' && comicScenes.length > 0) {
         const pauseLabel = comicPaused ? ' \u23F8' : ''
         return `${comicIndex + 1}/${comicScenes.length} ${comicShowingImage ? '\uD83D\uDDBC' : '\uD83D\uDCDD'}${pauseLabel}`
+      }
+      if (mode === 'PROMPTER') {
+        const pauseLabel = prompterRunning ? '' : ' \u23F8'
+        return `${prompterWordIndex + 1}/${prompterWords.length}${pauseLabel}`
       }
       return '\u2705 Result'
   }
@@ -158,6 +189,7 @@ function getStateLabel(): string {
 
 function getIdleLabel(): string {
   if (mode === 'COMIC') return 'Comic Story Mode'
+  if (mode === 'PROMPTER') return 'Paste text and press Start'
   return mode === 'CHAT' ? 'AI Assistant Ready' : 'Translator Ready'
 }
 
@@ -173,12 +205,19 @@ function updateWebUI(): void {
   elBtnTranslateMode.classList.toggle('active', mode === 'TRANSLATE')
   elBtnChatMode.classList.toggle('active', mode === 'CHAT')
   elBtnComicMode.classList.toggle('active', mode === 'COMIC')
+  elBtnPrompterMode.classList.toggle('active', mode === 'PROMPTER')
 
-  // Show live toggle only in TRANSLATE mode, style picker only in COMIC mode
+  // Show live toggle only in TRANSLATE mode, style picker only in COMIC mode, prompter input only in PROMPTER mode
   elLiveToggle.classList.toggle('hidden', mode !== 'TRANSLATE')
   elStylePicker.classList.toggle('hidden', mode !== 'COMIC')
+  elPrompterInput.classList.toggle('hidden', mode !== 'PROMPTER')
   elBtnPushMode.classList.toggle('active', !liveMode)
   elBtnLiveMode.classList.toggle('active', liveMode)
+
+  // Show captions toggle only in TRANSLATE + live mode
+  elCaptionsToggle.classList.toggle('hidden', !(mode === 'TRANSLATE' && liveMode))
+  elBtnTranslateModeLive.classList.toggle('active', !captionsMode)
+  elBtnCaptionsMode.classList.toggle('active', captionsMode)
 
   elFooter.className = ''
   if (state === 'LISTENING' && liveMode) elFooter.classList.add('live-listening')
@@ -224,6 +263,11 @@ function updateWebUI(): void {
         elTranslated.classList.add('hidden')
         renderComicPanels()
         elComicPanels.classList.remove('hidden')
+      } else if (mode === 'PROMPTER') {
+        elComicPanels.classList.add('hidden')
+        elOriginal.classList.add('hidden')
+        elTranslated.textContent = getPrompterDisplayText()
+        elTranslated.classList.remove('hidden')
       } else {
         elComicPanels.classList.add('hidden')
         if (lastOriginalText) {
@@ -238,9 +282,11 @@ function updateWebUI(): void {
       break
   }
 
-  // Show/hide result controls (page nav + stop TTS)
+  // Show/hide result controls (page nav + stop TTS) — not in PROMPTER mode
   const totalPages = getGlassesPageCount(lastTranslatedText)
-  if (state === 'RESULT' && totalPages > 1) {
+  if (mode === 'PROMPTER') {
+    elResultControls.classList.add('hidden')
+  } else if (state === 'RESULT' && totalPages > 1) {
     const activePage = glassesPage === -1 ? totalPages - 1 : glassesPage
     elPageIndicator.textContent = `${activePage + 1} / ${totalPages}`
     elResultControls.classList.remove('hidden')
@@ -291,7 +337,7 @@ function buildTextContainers(): TextContainerProperty[] {
       // Clean idle — just mode name centered
       contentText = mode === 'COMIC' ? 'Comic' : mode === 'CHAT' ? 'Chat' : ''
       headerText = mode === 'TRANSLATE' ? `${getSourceLang().label} \u2192 ${getTargetLang().label}` : ''
-      footerText = liveMode ? 'tap to start' : ''
+      footerText = liveMode ? 'tap to start' : (ttsMuted ? 'text only' : '')
       break
     case 'LISTENING':
       if (liveMode && liveFullTranslation) {
@@ -300,7 +346,7 @@ function buildTextContainers(): TextContainerProperty[] {
         const lines = liveFullTranslation.split('\n')
         contentText = lines.slice(-3).join('\n')
         headerText = `${getSourceLang().label} \u2192 ${getTargetLang().label}`
-        footerText = liveTtsMuted ? '\u25CF live \u2014 muted' : '\u25CF live'
+        footerText = captionsMode ? '\u25CF captions' : (ttsMuted ? '\u25CF live \u2014 muted' : '\u25CF live')
       } else {
         contentText = liveMode ? '\u25CF' : '\u2022 \u2022 \u2022'
         footerText = liveMode ? 'live' : 'listening'
@@ -311,10 +357,15 @@ function buildTextContainers(): TextContainerProperty[] {
       footerText = mode === 'CHAT' ? 'thinking' : 'translating'
       break
     case 'RESULT':
-      contentText = lastTranslatedText || ''
-      if (mode === 'COMIC' && comicScenes.length > 0) {
-        contentText = comicScenes[comicIndex]?.narration || ''
-        footerText = `${comicIndex + 1}/${comicScenes.length}${comicPaused ? ' \u23F8' : ''}`
+      if (mode === 'PROMPTER') {
+        contentText = getPrompterDisplayText()
+        footerText = `${prompterWordIndex + 1}/${prompterWords.length}${prompterRunning ? '' : ' \u23F8'}`
+      } else {
+        contentText = lastTranslatedText || ''
+        if (mode === 'COMIC' && comicScenes.length > 0) {
+          contentText = comicScenes[comicIndex]?.narration || ''
+          footerText = `${comicIndex + 1}/${comicScenes.length}${comicPaused ? ' \u23F8' : ''}`
+        }
       }
       break
   }
@@ -569,6 +620,18 @@ function uint8ArrayToBase64(bytes: Uint8Array): string {
   return btoa(binary)
 }
 
+function toggleTtsMute(): void {
+  ttsMuted = !ttsMuted
+  localStorage.setItem('ttsMuted', String(ttsMuted))
+  elTtsMuteToggle.checked = !ttsMuted
+  if (ttsMuted) {
+    ttsAudio.pause()
+    ttsQueue.length = 0
+    window.speechSynthesis.cancel()
+  }
+  updateWebUI()
+}
+
 // ── Live Translation ────────────────────────────────────────────
 
 function checkVAD(): boolean {
@@ -578,13 +641,16 @@ function checkVAD(): boolean {
   let sum = 0
   for (let i = 0; i < data.length; i++) sum += data[i]
   const avg = sum / data.length
-  console.log(`[VAD] avg=${avg.toFixed(1)} threshold=${VAD_THRESHOLD} speech=${avg > VAD_THRESHOLD}`)
+  if (avg > VAD_THRESHOLD) console.log(`[VAD] speech detected (avg=${avg.toFixed(1)})`)
   return avg > VAD_THRESHOLD
 }
 
 async function startLiveMode(): Promise<void> {
   liveFullTranscript = ''
   liveFullTranslation = ''
+  liveChunkSeq = 0
+  liveNextExpected = 0
+  livePendingChunks.clear()
 
   // Live mode always uses device mic (getUserMedia) — not glasses bridge.
   // Reason: live translation captures ambient audio from the environment,
@@ -607,6 +673,8 @@ async function startLiveMode(): Promise<void> {
     source.connect(liveAnalyser)
   } catch (err) {
     console.error('[Live] Mic error:', err)
+    liveMode = false
+    updateWebUI()
     return
   }
 
@@ -626,15 +694,16 @@ async function liveRecordLoop(): Promise<void> {
     const blob = await recordChunkFromStream(liveStream, CHUNK_DURATION_MS)
     if (!blob || blob.size < 100 || !liveMode) continue
     const base64 = await blobToBase64(blob)
-    console.log(`[Live] Sending chunk (${(base64.length / 1024).toFixed(0)}KB)`)
+    const seq = liveChunkSeq++
+    console.log(`[Live] Sending chunk #${seq} (${(base64.length / 1024).toFixed(0)}KB)`)
     // Fire and forget — start recording next chunk immediately
     // while this one is being transcribed + translated on server
-    void processLiveAudio(base64, 'webm')
+    void processLiveAudio(base64, 'webm', seq)
   }
   console.log('[Live] Record loop ended')
 }
 
-async function processLiveAudio(base64: string, format: string | undefined): Promise<void> {
+async function processLiveAudio(base64: string, format: string | undefined, seq: number): Promise<void> {
   try {
     const res = await fetch(`${BACKEND}/stream`, {
       method: 'POST',
@@ -649,29 +718,42 @@ async function processLiveAudio(base64: string, format: string | undefined): Pro
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
 
     const data = await res.json() as { original?: string; translated?: string }
-    console.log('[Live] Backend response:', data)
-    if (data.original && data.translated) {
-      liveFullTranscript += (liveFullTranscript ? ' ' : '') + data.original
-      liveFullTranslation += (liveFullTranslation ? '\n' : '') + data.translated
+    console.log(`[Live] Chunk #${seq} response:`, data)
+    if (data.original && (captionsMode || data.translated)) {
+      // Buffer out-of-order responses and flush in sequence
+      livePendingChunks.set(seq, { original: data.original, translated: data.translated ?? '' })
+      while (livePendingChunks.has(liveNextExpected)) {
+        const chunk = livePendingChunks.get(liveNextExpected)!
+        livePendingChunks.delete(liveNextExpected)
+        liveNextExpected++
+
+        const displayText = captionsMode ? chunk.original : chunk.translated
+        const transcriptText = chunk.original
+
+        liveFullTranscript += (liveFullTranscript ? ' ' : '') + transcriptText
+        liveFullTranslation += (liveFullTranslation ? '\n' : '') + displayText
+
+        // Queue TTS for this chunk (in order) — skip in captions mode
+        if (!captionsMode) {
+          speakQueued(chunk.translated, langCodeToTTS(getTargetLang().code))
+        }
+      }
 
       lastOriginalText = liveFullTranscript
       lastTranslatedText = liveFullTranslation
       glassesPage = -1
 
       if (state === 'LISTENING') {
-        // Still live — update display in-place
         updateWebUI()
         throttledGlassesUpdate()
       } else {
-        // Live mode was stopped while request was in flight — show as result
         showResult()
       }
-
-      // Queue TTS for this chunk
-      speakQueued(data.translated, langCodeToTTS(getTargetLang().code))
     }
   } catch (err) {
-    console.error('[Live] Chunk processing error:', err)
+    console.error(`[Live] Chunk #${seq} error:`, err)
+    // Skip failed chunk to not block the sequence
+    if (seq === liveNextExpected) liveNextExpected++
   }
 }
 
@@ -1055,8 +1137,8 @@ async function showResult(): Promise<void> {
     })
   }
 
-  // Speak the result aloud (skip if live mode — TTS already handled by speakQueued)
-  if (lastTranslatedText && !liveMode) {
+  // Speak the result aloud (skip if muted or live mode)
+  if (lastTranslatedText && !liveMode && !ttsMuted) {
     const lang = mode === 'CHAT'
       ? detectTTSLang(lastTranslatedText)
       : langCodeToTTS(getTargetLang().code)
@@ -1067,6 +1149,75 @@ async function showResult(): Promise<void> {
   const pages = getGlassesPageCount(lastTranslatedText)
   const timeout = pages > 1 ? RESULT_TIMEOUT_MS * pages : RESULT_TIMEOUT_MS
   resultTimer = setTimeout(() => { glassesPage = -1; setState('IDLE') }, timeout)
+}
+
+// ── Teleprompter ────────────────────────────────────────────────────
+
+function getPrompterDisplayText(): string {
+  if (prompterWords.length === 0) return ''
+  // Sliding window: a few words before current + words ahead to fill ~3 lines
+  const windowStart = Math.max(0, prompterWordIndex - 3)
+  const windowEnd = Math.min(prompterWords.length, prompterWordIndex + 18)
+  return prompterWords
+    .slice(windowStart, windowEnd)
+    .map((w, i) => {
+      const absIdx = windowStart + i
+      return absIdx === prompterWordIndex ? `[${w}]` : w
+    })
+    .join(' ')
+}
+
+function startPrompter(): void {
+  const text = elPrompterText.value.trim()
+  if (!text) return
+  prompterWords = text.split(/\s+/).filter(Boolean)
+  prompterWordIndex = 0
+  prompterRunning = true
+  prompterSpeed = parseInt(elPrompterSpeed.value, 10) || 4
+  state = 'RESULT'
+  updateWebUI()
+  void updateGlassesDisplay()
+  schedulePrompterAdvance()
+}
+
+function stopPrompter(): void {
+  prompterRunning = false
+  if (prompterInterval !== null) {
+    clearInterval(prompterInterval)
+    prompterInterval = null
+  }
+  state = 'IDLE'
+  updateWebUI()
+  void updateGlassesDisplay()
+}
+
+function pauseResumePrompter(): void {
+  if (prompterRunning) {
+    prompterRunning = false
+    if (prompterInterval !== null) { clearInterval(prompterInterval); prompterInterval = null }
+    updateWebUI()
+    void updateGlassesDisplay()
+  } else {
+    prompterRunning = true
+    schedulePrompterAdvance()
+    updateWebUI()
+    void updateGlassesDisplay()
+  }
+}
+
+function schedulePrompterAdvance(): void {
+  if (prompterInterval !== null) clearInterval(prompterInterval)
+  const msPerStep = Math.round(3000 / Math.max(1, prompterSpeed))
+  prompterInterval = window.setInterval(() => {
+    if (!prompterRunning) return
+    if (prompterWordIndex >= prompterWords.length - 1) {
+      stopPrompter()
+      return
+    }
+    prompterWordIndex = Math.min(prompterWordIndex + 1, prompterWords.length - 1)
+    void updateGlassesDisplay()
+    updateWebUI()
+  }, msPerStep)
 }
 
 // ── Gesture / event handling ────────────────────────────────────────
@@ -1093,22 +1244,25 @@ function toggleSpeaking(): void {
 function handleClick(): void {
   clearResultTimer()
 
+  // Prompter mode: click = start (IDLE) or pause/resume (RESULT)
+  if (mode === 'PROMPTER') {
+    if (state === 'IDLE') {
+      startPrompter()
+    } else if (state === 'RESULT') {
+      pauseResumePrompter()
+    }
+    return
+  }
+
   // Live mode: click toggles TTS mute (double-click stops live)
   if (liveMode && mode === 'TRANSLATE' && state === 'LISTENING') {
-    liveTtsMuted = !liveTtsMuted
-    if (liveTtsMuted) {
-      ttsAudio.pause()
-      ttsQueue.length = 0
-    }
-    console.log(`[Live] TTS ${liveTtsMuted ? 'muted' : 'unmuted'}`)
-    updateWebUI()
+    toggleTtsMute()
     return
   }
 
   // Live mode: start from idle/result
   if (liveMode && mode === 'TRANSLATE') {
     if (state === 'IDLE' || state === 'RESULT') {
-      liveTtsMuted = false
       void startLiveMode()
     }
     return
@@ -1142,6 +1296,13 @@ function handleClick(): void {
 }
 
 function handleScrollUp(): void {
+  // Prompter mode: scroll up = faster
+  if (mode === 'PROMPTER' && state === 'RESULT') {
+    prompterSpeed = Math.min(10, prompterSpeed + 1)
+    elPrompterSpeed.value = String(prompterSpeed)
+    if (prompterRunning) schedulePrompterAdvance()
+    return
+  }
   // Comic mode: previous scene/image
   if (mode === 'COMIC' && state === 'RESULT' && comicScenes.length > 0) {
     comicPrev()
@@ -1168,6 +1329,13 @@ function handleScrollUp(): void {
 }
 
 function handleScrollDown(): void {
+  // Prompter mode: scroll down = slower
+  if (mode === 'PROMPTER' && state === 'RESULT') {
+    prompterSpeed = Math.max(1, prompterSpeed - 1)
+    elPrompterSpeed.value = String(prompterSpeed)
+    if (prompterRunning) schedulePrompterAdvance()
+    return
+  }
   // Comic mode: next scene/image
   if (mode === 'COMIC' && state === 'RESULT' && comicScenes.length > 0) {
     comicNext()
@@ -1193,10 +1361,15 @@ function handleScrollDown(): void {
   void updateGlassesDisplay()
 }
 
-const MODES: AppMode[] = ['TRANSLATE', 'CHAT', 'COMIC']
+const MODES: AppMode[] = ['TRANSLATE', 'CHAT', 'COMIC', 'PROMPTER']
 function switchMode(): void {
   // Stop live mode if active
   if (liveMode && state === 'LISTENING') void stopLiveMode()
+  // Stop prompter if running
+  if (prompterRunning) {
+    prompterRunning = false
+    if (prompterInterval !== null) { clearInterval(prompterInterval); prompterInterval = null }
+  }
   const idx = MODES.indexOf(mode)
   mode = MODES[(idx + 1) % MODES.length]
   state = 'IDLE'
@@ -1209,8 +1382,8 @@ function switchMode(): void {
 }
 
 function handleDoubleClick(): void {
-  // In live mode: double-click stops live
-  if (liveMode && mode === 'TRANSLATE' && state === 'LISTENING') {
+  // In live mode: double-click stops live (any state, not just LISTENING)
+  if (liveMode && mode === 'TRANSLATE' && (state === 'LISTENING' || state === 'TRANSLATING')) {
     void stopLiveMode()
     return
   }
@@ -1247,6 +1420,7 @@ function setupKeyboardShortcuts(): void {
       case 'ArrowUp': e.preventDefault(); handleScrollUp(); break
       case 'ArrowDown': e.preventDefault(); handleScrollDown(); break
       case 'Tab': e.preventDefault(); switchMode(); updateWebUI(); void updateGlassesDisplay(); break
+      case 'KeyM': e.preventDefault(); toggleTtsMute(); break
     }
   })
 }
@@ -1312,13 +1486,32 @@ function setupWebControls(): void {
   })
 
   elBtnTranslateMode.addEventListener('click', () => {
-    if (mode !== 'TRANSLATE') { mode = 'TRANSLATE'; state = 'IDLE'; lastOriginalText = ''; lastTranslatedText = ''; comicScenes = []; updateWebUI(); void updateGlassesDisplay() }
+    if (mode !== 'TRANSLATE') { if (liveMode && state === 'LISTENING') void stopLiveMode(); mode = 'TRANSLATE'; state = 'IDLE'; lastOriginalText = ''; lastTranslatedText = ''; comicScenes = []; updateWebUI(); void updateGlassesDisplay() }
   })
   elBtnChatMode.addEventListener('click', () => {
-    if (mode !== 'CHAT') { mode = 'CHAT'; state = 'IDLE'; lastOriginalText = ''; lastTranslatedText = ''; comicScenes = []; updateWebUI(); void updateGlassesDisplay() }
+    if (mode !== 'CHAT') { if (liveMode && state === 'LISTENING') void stopLiveMode(); mode = 'CHAT'; state = 'IDLE'; lastOriginalText = ''; lastTranslatedText = ''; comicScenes = []; updateWebUI(); void updateGlassesDisplay() }
   })
   elBtnComicMode.addEventListener('click', () => {
-    if (mode !== 'COMIC') { mode = 'COMIC'; state = 'IDLE'; lastOriginalText = ''; lastTranslatedText = ''; comicScenes = []; updateWebUI(); void updateGlassesDisplay() }
+    if (mode !== 'COMIC') { if (liveMode && state === 'LISTENING') void stopLiveMode(); mode = 'COMIC'; state = 'IDLE'; lastOriginalText = ''; lastTranslatedText = ''; comicScenes = []; updateWebUI(); void updateGlassesDisplay() }
+  })
+  elBtnPrompterMode.addEventListener('click', () => {
+    if (mode !== 'PROMPTER') {
+      if (liveMode && state === 'LISTENING') void stopLiveMode()
+      if (prompterRunning) { prompterRunning = false; if (prompterInterval !== null) { clearInterval(prompterInterval); prompterInterval = null } }
+      mode = 'PROMPTER'; state = 'IDLE'; lastOriginalText = ''; lastTranslatedText = ''
+      updateWebUI(); void updateGlassesDisplay()
+    }
+  })
+  elBtnPrompterStart.addEventListener('click', () => {
+    if (state === 'IDLE') {
+      startPrompter()
+    } else if (state === 'RESULT') {
+      pauseResumePrompter()
+    }
+  })
+  elPrompterSpeed.addEventListener('input', () => {
+    prompterSpeed = parseInt(elPrompterSpeed.value, 10) || 4
+    if (prompterRunning) schedulePrompterAdvance()
   })
 
   // Live/Push toggle
@@ -1333,6 +1526,20 @@ function setupWebControls(): void {
     if (!liveMode) {
       liveMode = true
       if (state === 'LISTENING') void stopListeningAndProcess() // stop push recording first
+      updateWebUI()
+    }
+  })
+
+  // Captions mode toggle
+  elBtnTranslateModeLive.addEventListener('click', () => {
+    if (captionsMode) {
+      captionsMode = false
+      updateWebUI()
+    }
+  })
+  elBtnCaptionsMode.addEventListener('click', () => {
+    if (!captionsMode) {
+      captionsMode = true
       updateWebUI()
     }
   })
@@ -1364,6 +1571,19 @@ function setupWebControls(): void {
   if (savedPref !== null) elSaveHistoryToggle.checked = savedPref === 'true'
   elSaveHistoryToggle.addEventListener('change', () => {
     localStorage.setItem('g2-save-history', String(elSaveHistoryToggle.checked))
+  })
+
+  // TTS mute toggle — init from localStorage
+  elTtsMuteToggle.checked = !ttsMuted
+  elTtsMuteToggle.addEventListener('change', () => {
+    ttsMuted = !elTtsMuteToggle.checked
+    localStorage.setItem('ttsMuted', String(ttsMuted))
+    if (ttsMuted) {
+      ttsAudio.pause()
+      ttsQueue.length = 0
+      window.speechSynthesis.cancel()
+    }
+    updateWebUI()
   })
 
   // Audio device selectors
@@ -1671,6 +1891,82 @@ function escapeHtml(text: string): string {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
 
+// ── Usage tracking UI ──────────────────────────────────────────────
+
+interface CostData { usd: number; local: number; currency: string; symbol: string }
+interface UsageData {
+  cost: CostData
+  byType: Record<string, CostData>
+  byModel: Record<string, CostData>
+  tokens: number; images: number; audioMinutes: number; ttsCharacters: number; requests: number
+}
+
+function createUsageRow(label: string, value: string, accent = false): HTMLDivElement {
+  const div = document.createElement('div')
+  div.className = 'usage-row'
+  const lbl = document.createElement('span')
+  lbl.className = 'label'
+  lbl.textContent = label
+  const val = document.createElement('span')
+  val.className = accent ? 'value-accent' : 'value'
+  val.textContent = value
+  div.appendChild(lbl)
+  div.appendChild(val)
+  return div
+}
+
+function createUsageSection(label: string, d: UsageData): HTMLDivElement {
+  const section = document.createElement('div')
+  section.className = 'usage-section'
+  const h4 = document.createElement('h4')
+  h4.textContent = label
+  section.appendChild(h4)
+
+  const fmt = (cost: CostData) => cost.usd < 0.001 ? '< $0.001' : `$${cost.usd.toFixed(4)}`
+  const fmtLocal = (cost: CostData) => {
+    if (cost.currency === 'USD' || cost.local < 0.01) return ''
+    return ` (${cost.local.toFixed(2)} ${cost.symbol})`
+  }
+
+  section.appendChild(createUsageRow('Total', fmt(d.cost) + fmtLocal(d.cost), true))
+  section.appendChild(createUsageRow('Requests', String(d.requests)))
+  if (d.tokens > 0) section.appendChild(createUsageRow('Tokens', d.tokens.toLocaleString()))
+  if (d.audioMinutes > 0) section.appendChild(createUsageRow('Audio', `${d.audioMinutes} min`))
+  if (d.ttsCharacters > 0) section.appendChild(createUsageRow('TTS chars', d.ttsCharacters.toLocaleString()))
+  if (d.images > 0) section.appendChild(createUsageRow('Images', String(d.images)))
+
+  for (const [type, cost] of Object.entries(d.byType)) {
+    section.appendChild(createUsageRow(`  ${type}`, fmt(cost as CostData)))
+  }
+  return section
+}
+
+async function loadUsage(): Promise<void> {
+  try {
+    const lang = getTargetLang().code.split('-')[0]
+    const res = await fetch(`${BACKEND}/usage?lang=${lang}`)
+    const data = await res.json() as { all: UsageData; week: UsageData; day: UsageData }
+
+    elUsageContent.textContent = ''
+    elUsageContent.appendChild(createUsageSection('Today', data.day))
+    elUsageContent.appendChild(createUsageSection('This week', data.week))
+    elUsageContent.appendChild(createUsageSection('All time', data.all))
+  } catch (err) {
+    elUsageContent.textContent = 'Failed to load usage data'
+    console.error('[Usage]', err)
+  }
+}
+
+function setupUsage(): void {
+  elBtnShowUsage.addEventListener('click', () => {
+    const visible = !elUsagePanel.classList.contains('hidden')
+    elUsagePanel.classList.toggle('hidden', visible)
+    if (!visible) void loadUsage()
+  })
+}
+
+// ── History ────────────────────────────────────────────────────────
+
 function setupHistory(): void {
   elBtnOpenHistory.addEventListener('click', openHistory)
   elBtnHistoryClose.addEventListener('click', closeHistory)
@@ -1712,7 +2008,7 @@ const ttsQueue: string[] = []
 let ttsPlaying = false
 
 function speakQueued(text: string, _lang: string): void {
-  if (liveTtsMuted) return // Live mode TTS muted
+  if (ttsMuted) return
   ttsQueue.push(text)
   if (!ttsPlaying) void drainTtsQueue()
 }
@@ -1974,6 +2270,7 @@ function main(): void {
   setupWebControls()
   setupMediaSession()
   setupHistory()
+  setupUsage()
   void loadComicStyles()
   void initBridge()
 }

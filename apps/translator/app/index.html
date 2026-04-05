@@ -35,10 +35,22 @@
           <button id="btn-translate-mode" class="active">Translate</button>
           <button id="btn-chat-mode">Chat</button>
           <button id="btn-comic-mode">Comic</button>
+          <button id="btn-prompter-mode">Prompter</button>
+        </div>
+        <div id="prompter-input" class="hidden">
+          <textarea id="prompter-text" placeholder="Paste your speech text here..." rows="4"></textarea>
+          <div id="prompter-controls">
+            <label>Speed <input type="range" id="prompter-speed" min="1" max="10" value="4" /></label>
+            <button id="btn-prompter-start">&#9654; Start</button>
+          </div>
         </div>
         <div id="live-toggle" class="hidden">
           <button id="btn-push-mode" class="active">Push</button>
           <button id="btn-live-mode">Live</button>
+        </div>
+        <div id="captions-toggle" class="hidden">
+          <button id="btn-translate-mode-live" class="active">Translate</button>
+          <button id="btn-captions-mode">Captions</button>
         </div>
         <div id="style-picker" class="hidden">
           <div id="style-grid"></div>
@@ -60,6 +72,13 @@
               </select>
             </div>
             <div class="setting-row">
+              <label>Voice</label>
+              <label class="toggle-label">
+                <input type="checkbox" id="tts-mute-toggle" checked />
+                <span>Read translations aloud</span>
+              </label>
+            </div>
+            <div class="setting-row">
               <label>Save</label>
               <label class="toggle-label">
                 <input type="checkbox" id="save-history-toggle" checked />
@@ -78,6 +97,13 @@
               <label>Output</label>
               <select id="output-device-select"></select>
               <button id="btn-select-output" title="Pick BT output">&#x1F50A;</button>
+            </div>
+            <div class="setting-row">
+              <label>Usage</label>
+              <button id="btn-show-usage" style="flex:1; text-align:center">API costs</button>
+            </div>
+            <div id="usage-panel" class="hidden">
+              <div id="usage-content"></div>
             </div>
           </div>
         </details>
