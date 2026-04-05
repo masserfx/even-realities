@@ -1,0 +1,24 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /apps/translator/server
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels: [dependencies, automated]
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: npm
+    directory: /apps/my-glasses-app
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels: [dependencies, automated]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    labels: [ci, automated]

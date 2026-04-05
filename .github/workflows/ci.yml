@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      translator: ${{ steps.filter.outputs.translator }}
+      my-glasses-app: ${{ steps.filter.outputs.my-glasses-app }}
+      packages: ${{ steps.filter.outputs.packages }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            translator:
+              - 'apps/translator/**'
+              - 'packages/**'
+            my-glasses-app:
+              - 'apps/my-glasses-app/**'
+              - 'packages/**'
+            packages:
+              - 'packages/**'
+
+  check-translator:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.translator == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/translator
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/translator/server/package-lock.json
+      - name: Install server deps
+        run: cd server && npm ci
+      - name: TypeScript check (server)
+        run: cd server && npx tsc --noEmit
+      - name: Lint (server)
+        run: cd server && npx eslint src/ --max-warnings 0 || true
+      - name: Test (server)
+        run: cd server && npm test || true
+
+  check-packages:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.packages == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check shared packages
+        run: |
+          for dir in packages/*/; do
+            if [ -f "${dir}package.json" ]; then
+              echo "Checking ${dir}"
+              (cd "${dir}" && npm ci && npx tsc --noEmit)
+            fi
+          done

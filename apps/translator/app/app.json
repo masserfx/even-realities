@@ -1,0 +1,31 @@
+{
+  "package_id": "com.translator.g2",
+  "edition": "202601",
+  "name": "G2 Translator",
+  "version": "0.1.0",
+  "min_app_version": "2.0.0",
+  "min_sdk_version": "0.0.7",
+  "entrypoint": "index.html",
+  "permissions": [
+    {
+      "name": "network",
+      "desc": "This app needs network access to send audio for translation",
+      "whitelist": [
+        "http://localhost:3001"
+      ]
+    },
+    {
+      "name": "microphone",
+      "desc": "This app needs microphone access to capture speech for translation"
+    }
+  ],
+  "supported_languages": [
+    "en",
+    "cs",
+    "de",
+    "fr",
+    "es",
+    "ja",
+    "zh"
+  ]
+}

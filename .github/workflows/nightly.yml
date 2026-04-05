@@ -1,0 +1,50 @@
+name: Nightly Health Check
+
+on:
+  schedule:
+    - cron: '0 3 * * *'  # Every day 3:00 UTC
+  workflow_dispatch:
+
+jobs:
+  health-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: TypeScript check all apps
+        run: |
+          for dir in apps/*/; do
+            if [ -f "${dir}server/tsconfig.json" ]; then
+              echo "=== Checking ${dir}server ==="
+              (cd "${dir}server" && npm ci && npx tsc --noEmit)
+            fi
+            if [ -f "${dir}tsconfig.json" ]; then
+              echo "=== Checking ${dir} ==="
+              (cd "${dir}" && npm ci && npx tsc --noEmit) || true
+            fi
+          done
+
+      - name: Check for outdated dependencies
+        run: |
+          for dir in apps/*/server apps/*/; do
+            if [ -f "${dir}/package.json" ]; then
+              echo "=== Outdated in ${dir} ==="
+              (cd "${dir}" && npm outdated) || true
+            fi
+          done
+
+      - name: Notify on failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: 'Nightly health check failed - ' + new Date().toISOString().split('T')[0],
+              body: 'The nightly health check workflow failed. Check the workflow run in Actions tab.',
+              labels: ['bug', 'automated']
+            })

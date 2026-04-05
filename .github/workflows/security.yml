@@ -1,0 +1,53 @@
+name: Security
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'  # Every Monday 6:00 UTC
+  push:
+    branches: [main]
+    paths:
+      - '**/package-lock.json'
+      - '**/package.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  dependency-audit:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        app: [apps/translator/server, apps/my-glasses-app]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        working-directory: ${{ matrix.app }}
+        run: npm ci --ignore-scripts
+      - name: Audit dependencies
+        working-directory: ${{ matrix.app }}
+        run: npm audit --audit-level=high
+        continue-on-error: true
+
+  codeql:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+      - uses: github/codeql-action/analyze@v3
+
+  secrets-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: trufflesecurity/trufflehog@main
+        with:
+          extra_args: --only-verified

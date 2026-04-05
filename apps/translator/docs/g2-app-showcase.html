@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>G2 AI Assistant — App Showcase</title>
+<style>
+  body { font-family: 'Helvetica Neue', Arial, sans-serif; max-width: 720px; margin: 40px auto; color: #1a1a1a; line-height: 1.6; padding: 0 20px; }
+  h1 { font-size: 28px; margin-bottom: 4px; }
+  .subtitle { color: #666; font-size: 16px; margin-bottom: 32px; }
+  h2 { font-size: 20px; color: #0a6; border-bottom: 2px solid #0a6; padding-bottom: 4px; margin-top: 32px; }
+  .feature { margin: 16px 0; padding: 12px 16px; background: #f5f9f5; border-left: 3px solid #0a6; border-radius: 4px; }
+  .feature strong { display: block; font-size: 15px; margin-bottom: 4px; }
+  .feature span { color: #444; font-size: 14px; }
+  .tech { display: inline-block; background: #e8f5e8; color: #2a7a2a; padding: 2px 8px; border-radius: 3px; font-size: 12px; margin: 2px 4px 2px 0; }
+  .arch { background: #1a1a1a; color: #c0e0c0; padding: 16px; border-radius: 8px; font-family: 'SF Mono', monospace; font-size: 13px; white-space: pre; margin: 16px 0; }
+  .footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid #ddd; color: #888; font-size: 13px; }
+</style>
+</head>
+<body>
+
+<h1>G2 AI Assistant</h1>
+<p class="subtitle">Real-time translation, AI chat & comic stories for Even Realities G2 smart glasses</p>
+
+<h2>Live Simultaneous Translation</h2>
+<div class="feature">
+  <strong>Real-time audio translation with parallel processing pipeline</strong>
+  <span>Continuous microphone capture with overlapping chunk processing &mdash; while one segment is being transcribed and translated, the next is already recording. Whisper ASR + LLM translation, results display progressively on G2 HUD and are spoken via OpenAI TTS to connected earbuds. Ideal for foreign language tours, meetings, and live conversations.</span>
+</div>
+<div class="feature">
+  <strong>Multi-language support with auto-detection</strong>
+  <span>Automatic source language detection via Whisper. Target languages: Czech, English, German, French, Spanish, Japanese, Chinese. Context-aware translation using sliding window of recent phrases for coherent output.</span>
+</div>
+<div class="feature">
+  <strong>Voice Activity Detection</strong>
+  <span>Browser-side VAD using Web Audio API AnalyserNode. Silent chunks are skipped, saving API costs and reducing noise.</span>
+</div>
+
+<h2>AI Chat Assistant</h2>
+<div class="feature">
+  <strong>Streaming GPT responses on glasses HUD</strong>
+  <span>Voice or text input, SSE streaming responses with progressive display. Paginated text navigation via gestures. Optimized prompts for small HUD display, with automatic expansion for longer content (stories, explanations).</span>
+</div>
+
+<h2>Comic Story Generator</h2>
+<div class="feature">
+  <strong>AI-generated illustrated stories displayed on G2</strong>
+  <span>LLM generates structured scenes with narration + image prompts. DALL-E creates black &amp; white illustrations, processed to 2-bit indexed PNG (cnum=4) for G2's greyscale display. Synchronized TTS narration with image/text alternation.</span>
+</div>
+
+<h2>G2 Display Integration</h2>
+<div class="feature">
+  <strong>Optimized for 576&times;288px greyscale panel</strong>
+  <span>TextContainerProperty layout with header/content/footer. ImageContainerProperty (288&times;144px) with UPNG.js encoding. Paginated text (240 chars/page) with auto-scroll during streaming. Throttled updates (350ms) to prevent display flooding.</span>
+</div>
+
+<h2>Gesture Control</h2>
+<div class="feature">
+  <strong>Full gesture-driven interaction</strong>
+  <span>Click: start/stop recording, pause/resume TTS. Scroll up/down: page navigation, language switching. Double-click: mode switching (Translate / Chat / Comic). All gestures work via Even Hub SDK events.</span>
+</div>
+
+<h2>Architecture</h2>
+<div class="arch">Mic (G2/iPhone) &rarr; 3s audio chunks &rarr; base64
+        &darr;
+  POST /api/stream &rarr; Whisper ASR &rarr; GPT Translation
+        &darr;                                    &darr;
+  Progressive display on G2 HUD    OpenAI TTS &rarr; earbuds
+        &darr;
+  Multi-engine: GPT-4o-mini | GPT-4o | Ollama (offline)</div>
+
+<h2>Technology Stack</h2>
+<p>
+  <span class="tech">Even Hub SDK 0.0.9</span>
+  <span class="tech">TypeScript</span>
+  <span class="tech">Hono (server)</span>
+  <span class="tech">Vite (frontend)</span>
+  <span class="tech">OpenAI API</span>
+  <span class="tech">Whisper ASR</span>
+  <span class="tech">DALL-E 2</span>
+  <span class="tech">Sharp</span>
+  <span class="tech">UPNG.js</span>
+  <span class="tech">Web Audio API</span>
+  <span class="tech">Ollama/Gemma</span>
+</p>
+
+<h2>Offline Capability</h2>
+<div class="feature">
+  <strong>Local LLM fallback via Ollama</strong>
+  <span>Runtime engine switching between cloud (GPT-4o-mini, GPT-4o) and local (Ollama with Gemma models). Enables offline translation when internet is unavailable.</span>
+</div>
+
+<div class="footer">
+  <strong>Developer:</strong> Leos Hradek &bull; Czech Republic<br>
+  Built with Even Hub SDK &bull; Ready for G2 &amp; R1 development
+</div>
+
+</body>
+</html>

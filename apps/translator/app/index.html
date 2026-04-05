@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="theme-color" content="#050505" />
+    <title>G2 Assistant</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div id="app">
+      <header id="header">
+        <span id="mode-label">TRANSLATE</span>
+        <span id="lang-pair">AUTO &rarr; CS</span>
+      </header>
+      <main id="content">
+        <p id="status">Ready</p>
+        <p id="original" class="hidden"></p>
+        <p id="translated" class="hidden"></p>
+        <div id="comic-panels" class="hidden"></div>
+      </main>
+      <footer id="footer">
+        <span id="state-indicator">&#9210; Ready</span>
+        <div id="result-controls" class="hidden">
+          <button id="btn-prev-page" title="Previous page">&laquo;</button>
+          <span id="page-indicator"></span>
+          <button id="btn-next-page" title="Next page">&raquo;</button>
+          <button id="btn-pause-tts" title="Pause/Resume">Pause</button>
+        </div>
+      </footer>
+      <div id="controls">
+        <div id="mode-switcher">
+          <button id="btn-translate-mode" class="active">Translate</button>
+          <button id="btn-chat-mode">Chat</button>
+          <button id="btn-comic-mode">Comic</button>
+        </div>
+        <div id="live-toggle" class="hidden">
+          <button id="btn-push-mode" class="active">Push</button>
+          <button id="btn-live-mode">Live</button>
+        </div>
+        <div id="style-picker" class="hidden">
+          <div id="style-grid"></div>
+        </div>
+        <div id="input-row">
+          <input id="text-input" type="text" placeholder="Type text..." autocomplete="off" autocorrect="off" />
+          <button id="btn-send">&#x27A4;</button>
+        </div>
+        <details id="settings">
+          <summary>Settings</summary>
+          <div id="settings-content">
+            <div class="setting-row">
+              <label>Model</label>
+              <select id="engine-select">
+                <option value="gpt-4.1-nano">GPT-4.1 Nano</option>
+                <option value="gpt-4.1-mini">GPT-4.1 Mini</option>
+                <option value="gpt-4.1">GPT-4.1</option>
+                <option value="ollama">Ollama offline</option>
+              </select>
+            </div>
+            <div class="setting-row">
+              <label>Save</label>
+              <label class="toggle-label">
+                <input type="checkbox" id="save-history-toggle" checked />
+                <span>Save all outputs</span>
+              </label>
+            </div>
+            <div class="setting-row">
+              <label>History</label>
+              <button id="btn-open-history" style="flex:1; text-align:center">Browse history</button>
+            </div>
+            <div class="setting-row">
+              <label>Mic</label>
+              <select id="input-device-select"></select>
+            </div>
+            <div class="setting-row">
+              <label>Output</label>
+              <select id="output-device-select"></select>
+              <button id="btn-select-output" title="Pick BT output">&#x1F50A;</button>
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+    <!-- History overlay -->
+    <div id="history-overlay" class="hidden">
+      <div id="history-panel">
+        <div id="history-header">
+          <span id="history-title">History</span>
+          <button id="btn-history-close">&times;</button>
+        </div>
+        <div id="history-filters">
+          <button class="history-filter active" data-mode="">All</button>
+          <button class="history-filter" data-mode="translate">Translate</button>
+          <button class="history-filter" data-mode="chat">Chat</button>
+          <button class="history-filter" data-mode="comic">Comic</button>
+        </div>
+        <div id="history-lang-row">
+          <select id="history-lang-select">
+            <option value="">All languages</option>
+            <option value="cs">CS</option>
+            <option value="en">EN</option>
+            <option value="de">DE</option>
+            <option value="fr">FR</option>
+            <option value="es">ES</option>
+            <option value="ja">JA</option>
+            <option value="ko">KO</option>
+            <option value="zh">ZH</option>
+          </select>
+        </div>
+        <div id="history-list"></div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

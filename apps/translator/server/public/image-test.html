@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>G2 Comic Style Tester</title>
+  <style>
+    :root {
+      --bg: #0a0a0a;
+      --surface: #141414;
+      --border: rgba(255,255,255,0.1);
+      --text: #e0e0e0;
+      --dim: rgba(255,255,255,0.4);
+      --accent: #00d46a;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      padding: 24px;
+    }
+    h1 { font-size: 20px; font-weight: 600; margin-bottom: 16px; }
+
+    .controls {
+      display: flex; gap: 10px; margin-bottom: 24px; flex-wrap: wrap; align-items: flex-end;
+    }
+    .control-group { display: flex; flex-direction: column; gap: 4px; }
+    .control-group label { font-size: 11px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.5px; }
+    input[type="text"] {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+      padding: 8px 12px; color: var(--text); font-size: 14px; width: 400px; outline: none;
+    }
+    input:focus { border-color: var(--accent); }
+    select {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+      padding: 8px 12px; color: var(--text); font-size: 14px; outline: none; appearance: none;
+    }
+    button {
+      background: var(--accent); color: #000; border: none; border-radius: 8px;
+      padding: 8px 20px; font-size: 14px; font-weight: 600; cursor: pointer;
+    }
+    button:hover { opacity: 0.9; }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-all { background: #8b5cf6; }
+
+    .status { color: var(--dim); font-size: 13px; margin-bottom: 16px; min-height: 20px; }
+    .status-error { color: #ff4444; }
+
+    .results { display: flex; flex-direction: column; gap: 24px; }
+
+    .style-result {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+      padding: 16px; display: flex; flex-direction: column; gap: 12px;
+    }
+    .style-title { font-size: 15px; font-weight: 600; }
+    .style-error { color: #ff4444; font-size: 13px; }
+
+    .image-row { display: flex; gap: 16px; flex-wrap: wrap; }
+    .image-card { display: flex; flex-direction: column; gap: 4px; }
+    .card-label { font-size: 11px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.5px; }
+    .image-card img { border-radius: 6px; display: block; width: 288px; height: 144px; border: 1px solid var(--border); }
+    .image-card canvas { border-radius: 6px; display: block; }
+
+    .glasses-sim { background: #000; border-radius: 8px; padding: 8px; display: inline-block; }
+    .glasses-header { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+    .badge {
+      font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: 600;
+    }
+    .badge-2 { background: rgba(255,68,68,0.15); color: #ff6666; }
+    .badge-4 { background: rgba(0,212,106,0.15); color: var(--accent); }
+  </style>
+</head>
+<body>
+  <h1>G2 Comic Image Style Tester</h1>
+
+  <div class="controls">
+    <div class="control-group">
+      <label>Prompt</label>
+      <input type="text" id="prompt" value="A wizard casting a spell in a dark forest, magical energy flowing from his hands" />
+    </div>
+    <div class="control-group">
+      <label>Style</label>
+      <select id="style-select"></select>
+    </div>
+    <div class="control-group">
+      <label>Model</label>
+      <select id="model-select">
+        <option value="dall-e-2">DALL-E 2</option>
+        <option value="dall-e-3">DALL-E 3</option>
+      </select>
+    </div>
+    <button class="btn-single" id="btn-single">Generate</button>
+    <button class="btn-all" id="btn-all">All Styles</button>
+  </div>
+
+  <div id="status" class="status"></div>
+  <div id="results" class="results"></div>
+
+  <script>
+    const API = 'http://localhost:3001/api';
+    const statusEl = document.getElementById('status');
+    const resultsEl = document.getElementById('results');
+    const styleSelect = document.getElementById('style-select');
+    const btnSingle = document.getElementById('btn-single');
+    const btnAll = document.getElementById('btn-all');
+
+    // Load styles
+    fetch(API + '/image-test/styles')
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        data.styles.forEach(function(s) {
+          const opt = document.createElement('option');
+          opt.value = s.id;
+          opt.textContent = s.label;
+          styleSelect.appendChild(opt);
+        });
+      });
+
+    function setStatus(msg, isError) {
+      statusEl.textContent = msg;
+      statusEl.className = isError ? 'status status-error' : 'status';
+    }
+
+    function setButtons(disabled) {
+      btnSingle.disabled = disabled;
+      btnAll.disabled = disabled;
+    }
+
+    // Render greyscale image as G2 green display
+    function renderGlassesCanvas(base64, levels) {
+      const img = new Image();
+      const canvas = document.createElement('canvas');
+      canvas.width = 576;
+      canvas.height = 288;
+      canvas.style.width = '288px';
+      canvas.style.height = '144px';
+
+      img.onload = function() {
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, 576, 288);
+        const imageData = ctx.getImageData(0, 0, 576, 288);
+        const d = imageData.data;
+
+        for (let i = 0; i < d.length; i += 4) {
+          const grey = d[i];
+          let green;
+          if (levels === 2) {
+            green = grey >= 128 ? 255 : 0;
+          } else {
+            if (grey < 64) green = 0;
+            else if (grey < 128) green = 85;
+            else if (grey < 192) green = 170;
+            else green = 255;
+          }
+          d[i] = 0;
+          d[i + 1] = green;
+          d[i + 2] = 0;
+          d[i + 3] = 255;
+        }
+        ctx.putImageData(imageData, 0, 0);
+      };
+      img.src = 'data:image/png;base64,' + base64;
+      return canvas;
+    }
+
+    function createResultCard(label, original64, glasses464) {
+      const div = document.createElement('div');
+      div.className = 'style-result';
+
+      const title = document.createElement('div');
+      title.className = 'style-title';
+      title.textContent = label;
+      div.appendChild(title);
+
+      const row = document.createElement('div');
+      row.className = 'image-row';
+
+      // Original
+      const origCard = document.createElement('div');
+      origCard.className = 'image-card';
+      const origLabel = document.createElement('div');
+      origLabel.className = 'card-label';
+      origLabel.textContent = 'Original (greyscale)';
+      origCard.appendChild(origLabel);
+      const origImg = document.createElement('img');
+      origImg.src = 'data:image/png;base64,' + original64;
+      origImg.alt = label + ' original';
+      origCard.appendChild(origImg);
+      row.appendChild(origCard);
+
+      // G2 - 4 levels
+      const g4Card = document.createElement('div');
+      g4Card.className = 'image-card';
+      const g4Header = document.createElement('div');
+      g4Header.className = 'glasses-header';
+      const g4Label = document.createElement('span');
+      g4Label.className = 'card-label';
+      g4Label.textContent = 'G2 Display';
+      g4Header.appendChild(g4Label);
+      const g4Badge = document.createElement('span');
+      g4Badge.className = 'badge badge-4';
+      g4Badge.textContent = '4 levels';
+      g4Header.appendChild(g4Badge);
+      g4Card.appendChild(g4Header);
+      const g4Sim = document.createElement('div');
+      g4Sim.className = 'glasses-sim';
+      g4Sim.appendChild(renderGlassesCanvas(glasses464, 4));
+      g4Card.appendChild(g4Sim);
+      row.appendChild(g4Card);
+
+      // G2 - 2 levels
+      const g2Card = document.createElement('div');
+      g2Card.className = 'image-card';
+      const g2Header = document.createElement('div');
+      g2Header.className = 'glasses-header';
+      const g2Label = document.createElement('span');
+      g2Label.className = 'card-label';
+      g2Label.textContent = 'G2 Display';
+      g2Header.appendChild(g2Label);
+      const g2Badge = document.createElement('span');
+      g2Badge.className = 'badge badge-2';
+      g2Badge.textContent = '2 levels (current)';
+      g2Header.appendChild(g2Badge);
+      g2Card.appendChild(g2Header);
+      const g2Sim = document.createElement('div');
+      g2Sim.className = 'glasses-sim';
+      g2Sim.appendChild(renderGlassesCanvas(glasses464, 2));
+      g2Card.appendChild(g2Sim);
+      row.appendChild(g2Card);
+
+      div.appendChild(row);
+      return div;
+    }
+
+    function createErrorCard(label, errorMsg) {
+      const div = document.createElement('div');
+      div.className = 'style-result';
+      const title = document.createElement('div');
+      title.className = 'style-title';
+      title.textContent = label;
+      div.appendChild(title);
+      const err = document.createElement('div');
+      err.className = 'style-error';
+      err.textContent = errorMsg;
+      div.appendChild(err);
+      return div;
+    }
+
+    btnSingle.addEventListener('click', async function() {
+      const prompt = document.getElementById('prompt').value.trim();
+      const styleId = styleSelect.value;
+      const model = document.getElementById('model-select').value;
+      if (!prompt) return;
+
+      setButtons(true);
+      setStatus('Generating "' + styleId + '" style...');
+      resultsEl.textContent = '';
+
+      try {
+        const res = await fetch(API + '/image-test/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt: prompt, styleId: styleId, model: model }),
+        });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+
+        const label = styleSelect.options[styleSelect.selectedIndex].textContent;
+        resultsEl.appendChild(createResultCard(label, data.original, data.glasses4));
+        setStatus('Done');
+      } catch (err) {
+        setStatus('Error: ' + err.message, true);
+      }
+      setButtons(false);
+    });
+
+    btnAll.addEventListener('click', async function() {
+      const prompt = document.getElementById('prompt').value.trim();
+      const model = document.getElementById('model-select').value;
+      if (!prompt) return;
+
+      setButtons(true);
+      setStatus('Generating all 10 styles... this takes ~30-60s');
+      resultsEl.textContent = '';
+
+      try {
+        const res = await fetch(API + '/image-test/all-styles', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt: prompt, model: model }),
+        });
+        const data = await res.json();
+
+        data.results.forEach(function(r) {
+          if (r.error) {
+            resultsEl.appendChild(createErrorCard(r.label, r.error));
+          } else {
+            resultsEl.appendChild(createResultCard(r.label, r.original, r.glasses4));
+          }
+        });
+        setStatus('Done - ' + data.results.length + ' styles generated');
+      } catch (err) {
+        setStatus('Error: ' + err.message, true);
+      }
+      setButtons(false);
+    });
+  </script>
+</body>
+</html>
