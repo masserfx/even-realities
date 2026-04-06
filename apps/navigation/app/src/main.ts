@@ -254,8 +254,8 @@ function startGPS(): void {
   if (watchId !== null) return
   watchId = navigator.geolocation.watchPosition(
     onPosition,
-    onPositionError,
-    { enableHighAccuracy: true, maximumAge: 3000, timeout: 10000 }
+    onWatchError,
+    { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
   )
 }
 
@@ -263,11 +263,12 @@ function onPosition(pos: GeolocationPosition): void {
   const { longitude: lng, latitude: lat, accuracy } = pos.coords
   currentPosition = [lng, lat]
   savePosition(lng, lat)
+  updateMap()
 
   if (state !== 'NAVIGATING' || !route) return
 
-  // Ignore very inaccurate fixes during navigation
-  if (accuracy > 50) return
+  // Relaxed threshold — WebView GPS is often 60–100 m
+  if (accuracy > 100) return
 
   if (destination) {
     const distToDest = haversineDistance([lng, lat], destination)
@@ -281,9 +282,34 @@ function onPosition(pos: GeolocationPosition): void {
   updateNavDisplay()
 }
 
+// Watch error during active navigation — retry with low-accuracy fallback
+function onWatchError(err: GeolocationPositionError): void {
+  const PERMISSION_DENIED = 1
+  if (err.code === PERMISSION_DENIED) {
+    // Permanent denial — show full error UI
+    onPositionError(err)
+    return
+  }
+  // Timeout / unavailable — silently retry without high accuracy
+  if (watchId !== null) {
+    navigator.geolocation.clearWatch(watchId)
+    watchId = null
+  }
+  watchId = navigator.geolocation.watchPosition(
+    onPosition,
+    onPositionError,
+    { enableHighAccuracy: false, maximumAge: 10000, timeout: 20000 }
+  )
+}
+
 function onPositionError(err: GeolocationPositionError): void {
   const denied = err.code === 1  // PERMISSION_DENIED
   const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent)
+  // During active navigation don't show the error panel — just update status
+  if (state === 'NAVIGATING') {
+    setStatus('GPS slabý signál')
+    return
+  }
   setStatus('GPS nedostupné')
   gpsError.classList.remove('hidden')
   manualLocation.classList.remove('hidden')
@@ -291,7 +317,7 @@ function onPositionError(err: GeolocationPositionError): void {
   if (denied) {
     if (isIOS) {
       gpsErrorMsg.innerHTML =
-        'GPS zamítnuto.<br><b>iPhone:</b> Nastavení → Soukromí → Poloha → Even Hub → <b>Při používání</b>'
+        'GPS zamítnuto.<br><b>iPhone:</b> Nastavení → Soukromí → Poloha → Safari → <b>Při používání</b>'
       const btn = document.getElementById('btn-open-settings') as HTMLButtonElement | null
       if (btn) btn.style.display = 'inline-block'
     } else {
@@ -305,15 +331,19 @@ function onPositionError(err: GeolocationPositionError): void {
 document.getElementById('btn-retry-gps')!.addEventListener('click', () => {
   gpsError.classList.add('hidden')
   setStatus('Čekám na GPS...')
+  if (watchId !== null) { navigator.geolocation.clearWatch(watchId); watchId = null }
   navigator.geolocation.getCurrentPosition(
     (pos) => {
       currentPosition = [pos.coords.longitude, pos.coords.latitude]
+      savePosition(pos.coords.longitude, pos.coords.latitude)
       gpsError.classList.add('hidden')
       manualLocation.classList.add('hidden')
       setStatus('GPS OK')
+      updateMap()
+      startGPS()
     },
     onPositionError,
-    { enableHighAccuracy: true, timeout: 10000 }
+    { enableHighAccuracy: false, timeout: 15000 }
   )
 })
 
