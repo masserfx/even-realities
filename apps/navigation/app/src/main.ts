@@ -622,11 +622,142 @@ async function getLocationByIP(): Promise<[number, number] | null> {
   return null
 }
 
+// ── Favorites ─────────────────────────────────────────────────────────
+
+type Favorite = { name: string; coords: [number, number] }  // [lng, lat]
+
+const FAV_KEY = 'nav-favorites'
+const FAV_ICONS: Record<string, string> = { 'Domov': '🏠', 'Home': '🏠', 'Kancelář': '🏢', 'Office': '🏢', 'Práce': '🏢' }
+const FAV_MAX = 3
+
+const favoritesBar = document.getElementById('favorites-bar') as HTMLElement
+const favDialog = document.getElementById('fav-dialog') as HTMLElement
+const favNameInput = document.getElementById('fav-name-input') as HTMLInputElement
+const btnSaveFav = document.getElementById('btn-save-fav') as HTMLButtonElement
+const btnFavCancel = document.getElementById('btn-fav-cancel') as HTMLButtonElement
+const btnFavSave = document.getElementById('btn-fav-save') as HTMLButtonElement
+
+function loadFavorites(): Favorite[] {
+  try {
+    const raw = localStorage.getItem(FAV_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw) as unknown
+    if (!Array.isArray(parsed)) return []
+    return (parsed as Favorite[]).filter(
+      (f) => typeof f.name === 'string' && Array.isArray(f.coords) && f.coords.length === 2
+    )
+  } catch { return [] }
+}
+
+function saveFavorites(favs: Favorite[]): void {
+  localStorage.setItem(FAV_KEY, JSON.stringify(favs))
+}
+
+function getFavIcon(name: string): string {
+  return FAV_ICONS[name] ?? '⭐'
+}
+
+function renderFavoritesBar(): void {
+  while (favoritesBar.firstChild) favoritesBar.removeChild(favoritesBar.firstChild)
+
+  const favs = loadFavorites()
+  const shown = favs.slice(0, FAV_MAX)
+
+  for (const fav of shown) {
+    const btn = document.createElement('button')
+    btn.textContent = getFavIcon(fav.name)
+    btn.title = fav.name
+    btn.addEventListener('click', () => {
+      destinationInput.value = fav.name
+      clearSuggestions()
+      void startNavigation(fav.coords)
+    })
+    favoritesBar.appendChild(btn)
+  }
+
+  // Show "+" button if under limit — only clickable during active navigation
+  if (favs.length < FAV_MAX) {
+    const addBtn = document.createElement('button')
+    addBtn.textContent = '+'
+    addBtn.title = 'Uložit aktuální cíl jako oblíbené (naviguj nejdřív)'
+    addBtn.style.opacity = '0.4'
+    addBtn.addEventListener('click', () => {
+      if (destination) openFavDialog(destination)
+      else setStatus('Naviguj nejdřív, pak ulož')
+    })
+    favoritesBar.appendChild(addBtn)
+  }
+}
+
+function openFavDialog(coords: [number, number] | null): void {
+  favNameInput.value = ''
+  favDialog.classList.remove('hidden')
+  favNameInput.focus()
+
+  // Store pending coords in data attr
+  if (coords) {
+    favDialog.dataset['pendingLng'] = String(coords[0])
+    favDialog.dataset['pendingLat'] = String(coords[1])
+  } else {
+    delete favDialog.dataset['pendingLng']
+    delete favDialog.dataset['pendingLat']
+  }
+}
+
+function closeFavDialog(): void {
+  favDialog.classList.add('hidden')
+  favNameInput.value = ''
+}
+
+function commitSaveFavorite(): void {
+  const name = favNameInput.value.trim()
+  if (!name) { favNameInput.focus(); return }
+
+  let coords: [number, number] | null = null
+
+  const lngStr = favDialog.dataset['pendingLng']
+  const latStr = favDialog.dataset['pendingLat']
+  if (lngStr !== undefined && latStr !== undefined) {
+    coords = [parseFloat(lngStr), parseFloat(latStr)]
+  } else if (destination) {
+    coords = destination
+  }
+
+  if (!coords) { closeFavDialog(); return }
+
+  const favs = loadFavorites().filter((f) => f.name !== name)
+  favs.unshift({ name, coords })
+  saveFavorites(favs.slice(0, FAV_MAX))
+  renderFavoritesBar()
+  closeFavDialog()
+}
+
+// Save button in nav card → open dialog with current destination
+btnSaveFav.addEventListener('click', () => {
+  if (!destination) return
+  openFavDialog(destination)
+})
+
+btnFavCancel.addEventListener('click', closeFavDialog)
+
+btnFavSave.addEventListener('click', commitSaveFavorite)
+
+favNameInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') commitSaveFavorite()
+  if (e.key === 'Escape') closeFavDialog()
+})
+
+// Close dialog when clicking backdrop
+favDialog.addEventListener('click', (e) => {
+  if (e.target === favDialog) closeFavDialog()
+})
+
 // ── Boot ──────────────────────────────────────────────────────────────
 
 showPanel('search')
 setStatus('Připraven')
 initMap()
+renderFavoritesBar()
 
 // Simulator always starts immediately — real bridge layered on top if glasses connect
 simulatorBridge = createSimulatedBridge()

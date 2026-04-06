@@ -1,24 +1,24 @@
 {
-  "package_id": "com.navigation.g2",
+  "package_id": "com.hradev.navigation",
   "edition": "202601",
   "name": "G2 Navigation",
   "version": "0.1.0",
+  "description": "Turn-by-turn walking and cycling navigation with G2 glasses display",
+  "author": "leos@hradev.cz",
   "min_app_version": "2.0.0",
-  "min_sdk_version": "0.0.7",
+  "min_sdk_version": "0.0.9",
   "entrypoint": "index.html",
   "permissions": [
     {
       "name": "network",
-      "desc": "This app needs network access for routing and geocoding",
+      "desc": "Navigation requires network access for routing, geocoding and map tiles",
       "whitelist": [
-        "http://localhost:3002",
-        "http://192.168.0.121:3002",
-        "http://100.108.215.29:3002"
+        "91.99.126.53:3002"
       ]
     },
     {
       "name": "location",
-      "desc": "This app needs GPS location to provide turn-by-turn navigation"
+      "desc": "GPS location is required for turn-by-turn navigation"
     }
   ],
   "supported_languages": [

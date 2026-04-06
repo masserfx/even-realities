@@ -328,10 +328,124 @@ html, body, #app {
   color: var(--accent);
 }
 
+#favorites-bar {
+  display: flex;
+  gap: 4px;
+}
+
+#favorites-bar button {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 16px;
+  padding: 4px 8px;
+  line-height: 1;
+  transition: all 0.15s;
+}
+
+#favorites-bar button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 #status-text {
   font-size: 12px;
   color: var(--muted);
   margin-left: auto;
+}
+
+/* ── Save favorite button in nav card ── */
+
+#btn-save-fav {
+  background: transparent;
+  border: 1px solid var(--muted);
+  border-radius: var(--radius);
+  color: var(--muted);
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: 13px;
+  padding: 4px 10px;
+  line-height: 1;
+  transition: all 0.15s;
+}
+
+#btn-save-fav:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ── Favorite save dialog ── */
+
+#fav-dialog {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(6px);
+}
+
+#fav-dialog-box {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: min(320px, 90vw);
+  backdrop-filter: blur(16px);
+}
+
+#fav-dialog-label {
+  font-size: 12px;
+  color: var(--muted);
+  letter-spacing: 0.05em;
+}
+
+#fav-name-input {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 15px;
+  padding: 10px 12px;
+  outline: none;
+}
+
+#fav-name-input:focus { border-color: var(--accent); }
+
+#fav-dialog-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+#btn-fav-cancel {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--muted);
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: 13px;
+  padding: 8px 14px;
+}
+
+#btn-fav-save {
+  background: var(--accent);
+  border: none;
+  border-radius: var(--radius);
+  color: #000;
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: 13px;
+  padding: 8px 14px;
 }
 
 /* ── Leaflet overrides ── */

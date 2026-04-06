@@ -57,6 +57,7 @@
           <span id="nav-distance">–</span>
           <span class="dot">•</span>
           <span id="nav-eta">–</span>
+          <button id="btn-save-fav" title="Uložit jako oblíbené">⭐ Uložit</button>
           <button id="btn-stop-nav">&#9632;</button>
         </div>
       </div>
@@ -73,8 +74,21 @@
           <button id="btn-walking" class="active">Pěší</button>
           <button id="btn-cycling">Cyklo</button>
         </div>
+        <div id="favorites-bar"></div>
         <span id="status-text">Připraven</span>
         <span id="nav-profile" class="hidden">WALKING</span>
+      </div>
+
+      <!-- Save favorite dialog -->
+      <div id="fav-dialog" class="hidden">
+        <div id="fav-dialog-box">
+          <label id="fav-dialog-label">Název oblíbeného místa</label>
+          <input id="fav-name-input" type="text" placeholder="např. Domov" autocomplete="off" />
+          <div id="fav-dialog-actions">
+            <button id="btn-fav-cancel">Zrušit</button>
+            <button id="btn-fav-save">Uložit</button>
+          </div>
+        </div>
       </div>
 
     </div>
