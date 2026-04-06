@@ -125,7 +125,8 @@ html, body, #app {
   line-height: 1.5;
 }
 
-#btn-retry-gps {
+#btn-retry-gps,
+#btn-open-settings {
   align-self: flex-start;
   background: transparent;
   border: 1px solid var(--danger);

@@ -279,13 +279,23 @@ function onPosition(pos: GeolocationPosition): void {
 
 function onPositionError(err: GeolocationPositionError): void {
   const denied = err.code === 1  // PERMISSION_DENIED
-  const msg = denied
-    ? 'GPS zamítnuto. Povol polohu v nastavení prohlížeče, nebo zadej polohu ručně.'
-    : `GPS chyba: ${err.message}`
+  const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent)
   setStatus('GPS nedostupné')
-  gpsErrorMsg.textContent = msg
   gpsError.classList.remove('hidden')
   manualLocation.classList.remove('hidden')
+
+  if (denied) {
+    if (isIOS) {
+      gpsErrorMsg.innerHTML =
+        'GPS zamítnuto.<br><b>iPhone:</b> Nastavení → Soukromí → Poloha → Even Hub → <b>Při používání</b>'
+      const btn = document.getElementById('btn-open-settings') as HTMLButtonElement | null
+      if (btn) btn.style.display = 'inline-block'
+    } else {
+      gpsErrorMsg.textContent = 'GPS zamítnuto. Povol polohu v nastavení prohlížeče, nebo zadej polohu ručně.'
+    }
+  } else {
+    gpsErrorMsg.textContent = `GPS chyba: ${err.message}`
+  }
 }
 
 document.getElementById('btn-retry-gps')!.addEventListener('click', () => {
