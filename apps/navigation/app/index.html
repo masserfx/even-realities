@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="cs">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="theme-color" content="#050505" />
+    <title>G2 Navigation</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div id="app">
+
+      <!-- Full-screen map (always visible) -->
+      <div id="map"></div>
+
+      <!-- Search overlay (top) -->
+      <div id="search-overlay">
+        <div id="gps-error" class="hidden">
+          <p id="gps-error-msg"></p>
+          <button id="btn-retry-gps">Zkusit znovu</button>
+        </div>
+        <div id="manual-location" class="hidden">
+          <label>Moje poloha (lat, lng)</label>
+          <div id="manual-location-row">
+            <input id="manual-lat" type="number" step="any" placeholder="50.0755" />
+            <input id="manual-lng" type="number" step="any" placeholder="14.4378" />
+            <button id="btn-set-location">OK</button>
+          </div>
+        </div>
+        <div id="search-box">
+          <input
+            id="destination-input"
+            type="text"
+            placeholder="Zadej cíl..."
+            autocomplete="off"
+            autocorrect="off"
+            spellcheck="false"
+          />
+          <button id="btn-search">&#x27A4;</button>
+        </div>
+        <ul id="suggestions"></ul>
+      </div>
+
+      <!-- Navigation instruction card (bottom, shown during navigation) -->
+      <div id="nav-card" class="hidden">
+        <div id="nav-card-main">
+          <div id="nav-arrow">↑</div>
+          <div id="nav-texts">
+            <div id="nav-instruction">Připravuji trasu...</div>
+            <div id="nav-street"></div>
+          </div>
+        </div>
+        <div id="nav-meta">
+          <span id="nav-distance">–</span>
+          <span class="dot">•</span>
+          <span id="nav-eta">–</span>
+          <button id="btn-stop-nav">&#9632;</button>
+        </div>
+      </div>
+
+      <!-- Arrived overlay -->
+      <div id="arrived-panel" class="hidden">
+        <div id="arrived-icon">🏁</div>
+        <div id="arrived-text">Jsi v cíli!</div>
+      </div>
+
+      <!-- Profile + status bar (bottom strip) -->
+      <div id="bottom-bar">
+        <div id="profile-switcher">
+          <button id="btn-walking" class="active">Pěší</button>
+          <button id="btn-cycling">Cyklo</button>
+        </div>
+        <span id="status-text">Připraven</span>
+        <span id="nav-profile" class="hidden">WALKING</span>
+      </div>
+
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
