@@ -24,7 +24,7 @@ export interface GeocodingResult {
   center: [number, number]  // [lng, lat]
 }
 
-const BACKEND = 'http://localhost:3002/api'
+const BACKEND = (import.meta.env.VITE_BACKEND as string | undefined) ?? 'http://localhost:3002/api'
 
 // ── Geocoding ────────────────────────────────────────────────────────
 

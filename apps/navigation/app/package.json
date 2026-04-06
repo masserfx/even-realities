@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "pack": "npm run build && evenhub pack app.json dist/ -o navigation.ehpk",
+    "qr": "evenhub qr -i 100.108.215.29 -p 5173"
   },
   "devDependencies": {
     "@evenrealities/evenhub-cli": "^0.1.11",
