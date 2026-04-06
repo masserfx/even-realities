@@ -22,13 +22,16 @@ function createSimulatorUI(): { screen: HTMLElement } {
   wrap.id = 'gsim-wrap'
   Object.assign(wrap.style, {
     position: 'fixed',
-    bottom: '0',
+    bottom: 'env(safe-area-inset-bottom, 0px)',
     left: '0',
     right: '0',
     zIndex: '9999',
     background: '#0a0a0a',
-    borderTop: '1px solid #00aa00',
+    borderTop: '2px solid #00cc00',
     fontFamily: 'monospace',
+    // Lift above iOS Safari bottom browser bar
+    marginBottom: '0',
+    paddingBottom: '4px',
   })
 
   // Header
@@ -75,19 +78,34 @@ function createSimulatorUI(): { screen: HTMLElement } {
   screenWrap.appendChild(screen)
   wrap.appendChild(header)
   wrap.appendChild(screenWrap)
-  document.body.appendChild(wrap)
 
-  // Padding so nav card doesn't hide behind simulator
-  document.body.style.paddingBottom = (Math.round(DISPLAY_H * scale) + 30) + 'px'
+  // Insert above #bottom-bar so iOS Safari browser chrome doesn't hide it
+  const bottomBar = document.getElementById('bottom-bar')
+  if (bottomBar) {
+    bottomBar.parentElement!.insertBefore(wrap, bottomBar)
+  } else {
+    document.body.appendChild(wrap)
+  }
+
+  // Push nav card up so it doesn't overlap simulator
+  const simHeight = Math.round(DISPLAY_H * scale) + 32
+  const navCard = document.getElementById('nav-card')
+  if (navCard) {
+    const prev = navCard.style.bottom || 'calc(env(safe-area-inset-bottom, 0px) + 64px)'
+    navCard.dataset['origBottom'] = prev
+    navCard.style.bottom = `calc(${simHeight}px + 8px)`
+  }
 
   let visible = true
   toggle.addEventListener('click', () => {
     visible = !visible
     screenWrap.style.display = visible ? 'block' : 'none'
     toggle.textContent = visible ? 'Skrýt' : 'Zobrazit'
-    document.body.style.paddingBottom = visible
-      ? (Math.round(DISPLAY_H * scale) + 30) + 'px'
-      : '30px'
+    if (navCard) {
+      navCard.style.bottom = visible
+        ? `calc(${simHeight}px + 8px)`
+        : (navCard.dataset['origBottom'] ?? '64px')
+    }
   })
 
   return { screen }
