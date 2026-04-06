@@ -413,11 +413,13 @@ function updateNavDisplay(): void {
       totalDistance: route.totalDistance,
       profile,
     }
+    // Show text immediately, images fill in when server responds
+    void displayNavStep(bridge, page, null, null)
     void Promise.all([
       fetchMapImage(),
       fetchTurnArrow(step.maneuverType, step.maneuverModifier),
     ]).then(([mapImage, turnArrow]) => {
-      if (bridge) void displayNavStep(bridge, page, mapImage, turnArrow)
+      if (bridge && (mapImage ?? turnArrow)) void displayNavStep(bridge, page, mapImage, turnArrow)
     })
   }
 }
