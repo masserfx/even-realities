@@ -259,6 +259,7 @@ function startGPS(): void {
 function onPosition(pos: GeolocationPosition): void {
   const { longitude: lng, latitude: lat, accuracy } = pos.coords
   currentPosition = [lng, lat]
+  savePosition(lng, lat)
 
   if (state !== 'NAVIGATING' || !route) return
 
@@ -321,6 +322,7 @@ document.getElementById('btn-set-location')!.addEventListener('click', () => {
     return
   }
   currentPosition = [lng, lat]
+  savePosition(lng, lat)
   gpsError.classList.add('hidden')
   manualLocation.classList.add('hidden')
   setStatus(`Poloha: ${lat.toFixed(4)}, ${lng.toFixed(4)}`)
@@ -522,6 +524,32 @@ function handleGlassesEvent(event: EvenHubEvent): void {
   }
 }
 
+// ── Location persistence ──────────────────────────────────────────────
+
+function savePosition(lng: number, lat: number): void {
+  localStorage.setItem('nav-last-pos', JSON.stringify([lng, lat]))
+}
+
+function loadSavedPosition(): [number, number] | null {
+  try {
+    const raw = localStorage.getItem('nav-last-pos')
+    if (!raw) return null
+    const pos = JSON.parse(raw) as [number, number]
+    return Array.isArray(pos) && pos.length === 2 ? pos : null
+  } catch { return null }
+}
+
+async function getLocationByIP(): Promise<[number, number] | null> {
+  try {
+    const res = await fetch('https://ipapi.co/json/', { signal: AbortSignal.timeout(5000) })
+    const d = await res.json() as { longitude?: number; latitude?: number }
+    if (typeof d.longitude === 'number' && typeof d.latitude === 'number') {
+      return [d.longitude, d.latitude]
+    }
+  } catch { /* ignore */ }
+  return null
+}
+
 // ── Boot ──────────────────────────────────────────────────────────────
 
 showPanel('search')
@@ -529,12 +557,37 @@ setStatus('Připraven')
 initMap()
 void initGlasses()
 
-// Try silent GPS fix to centre map immediately
+// Pre-fill manual location form with last saved position
+const savedPos = loadSavedPosition()
+if (savedPos) {
+  manualLat.value = savedPos[1].toFixed(6)
+  manualLng.value = savedPos[0].toFixed(6)
+}
+
+// Try GPS → saved position → IP geolocation
 navigator.geolocation.getCurrentPosition(
   (pos) => {
     currentPosition = [pos.coords.longitude, pos.coords.latitude]
+    savePosition(pos.coords.longitude, pos.coords.latitude)
     updateMap()
   },
-  () => { /* silently ignore — user sees error when they try to navigate */ },
+  async () => {
+    // GPS failed — try saved position first, then IP geolocation
+    if (savedPos) {
+      currentPosition = savedPos
+      setStatus(`Poloha: uložená (${savedPos[1].toFixed(4)}, ${savedPos[0].toFixed(4)})`)
+      updateMap()
+      return
+    }
+    setStatus('Zjišťuji polohu...')
+    const ipPos = await getLocationByIP()
+    if (ipPos) {
+      currentPosition = ipPos
+      manualLat.value = ipPos[1].toFixed(6)
+      manualLng.value = ipPos[0].toFixed(6)
+      setStatus(`Poloha z IP (přibližná)`)
+      updateMap()
+    }
+  },
   { enableHighAccuracy: false, timeout: 8000, maximumAge: 30000 }
 )
