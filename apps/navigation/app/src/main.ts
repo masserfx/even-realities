@@ -26,6 +26,7 @@ import {
   resetGlassesState,
   type GlassesNavPage,
 } from './glasses.ts'
+import { createSimulatedBridge } from './simulator.ts'
 
 const BACKEND = (import.meta.env.VITE_BACKEND as string | undefined) ?? 'http://localhost:3002/api'
 
@@ -501,11 +502,12 @@ async function initGlasses(): Promise<void> {
   try {
     bridge = await waitForEvenAppBridge()
     bridge.onEvenHubEvent((event: EvenHubEvent) => handleGlassesEvent(event))
-    // Start IMU heading reports at 500ms interval
     await bridge.imuControl(true, ImuReportPace.P500)
     void displayIdle(bridge, 'Zadej cíl v aplikaci')
   } catch {
-    console.warn('Glasses not connected — running in browser-only mode')
+    console.info('Glasses not connected — using browser simulator')
+    bridge = createSimulatedBridge()
+    void displayIdle(bridge, 'Zadej cíl v aplikaci')
   }
 }
 
