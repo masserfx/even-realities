@@ -271,7 +271,7 @@ function startGPS(): void {
 function onPosition(pos: GeolocationPosition): void {
   const { longitude: lng, latitude: lat, accuracy } = pos.coords
   currentPosition = [lng, lat]
-  savePosition(lng, lat)
+  if (accuracy <= 500) savePosition(lng, lat)
   updateMap()
 
   if (state !== 'NAVIGATING' || !route) return
@@ -641,12 +641,14 @@ if (!savedPos) {
   })
 }
 
-// Try GPS — overwrites IP/saved position with accurate fix
+// Try GPS immediately with high accuracy — overwrites IP/saved position
+// Only save to localStorage when accuracy is decent (≤500m avoids bad network fixes)
 navigator.geolocation.getCurrentPosition(
   (pos) => {
-    currentPosition = [pos.coords.longitude, pos.coords.latitude]
-    savePosition(pos.coords.longitude, pos.coords.latitude)
-    setStatus('GPS OK')
+    const { longitude: lng, latitude: lat, accuracy } = pos.coords
+    currentPosition = [lng, lat]
+    if (accuracy <= 500) savePosition(lng, lat)
+    setStatus(accuracy <= 50 ? 'GPS OK' : `GPS (${Math.round(accuracy)} m)`)
     updateMap()
     if (pendingDestination) {
       const dest = pendingDestination
@@ -655,5 +657,5 @@ navigator.geolocation.getCurrentPosition(
     }
   },
   () => { /* silent — already have savedPos or IP fallback */ },
-  { enableHighAccuracy: false, timeout: 8000, maximumAge: 30000 }
+  { enableHighAccuracy: true, timeout: 15000, maximumAge: 5000 }
 )
