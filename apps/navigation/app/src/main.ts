@@ -425,6 +425,10 @@ async function fetchTurnArrow(type: string, modifier: string): Promise<string | 
   }
 }
 
+// Throttle glasses updates: render at most every 4s unless step changed
+let lastGlassesUpdate = 0
+let lastRenderedStepIndex = -1
+
 function updateNavDisplay(): void {
   if (!route) return
   const step = route.steps[stepIndex]
@@ -446,20 +450,33 @@ function updateNavDisplay(): void {
   navEta.textContent = formatDuration(remainingDuration)
   updateMap()
 
-  if (bridge ?? simulatorBridge) {
-    const page: GlassesNavPage = {
-      step,
-      distanceToStep: distToStep,
-      remainingDuration,
-      totalDistance: route.totalDistance,
-      profile,
-    }
-    // Helper: send to real bridge + always mirror to simulator
-    const pushToGlasses = (mapImage: string | null, turnArrow: string | null) => {
-      if (bridge) void displayNavStep(bridge, page, mapImage, turnArrow)
-      if (simulatorBridge && simulatorBridge !== bridge) void displayNavStep(simulatorBridge, page, mapImage, turnArrow)
-    }
-    // Show text immediately, images fill in when server responds
+  if (!(bridge ?? simulatorBridge)) return
+
+  const now = Date.now()
+  const stepChanged = stepIndex !== lastRenderedStepIndex
+  if (!stepChanged && now - lastGlassesUpdate < 4000) return  // throttle
+  lastGlassesUpdate = now
+  lastRenderedStepIndex = stepIndex
+
+  const page: GlassesNavPage = {
+    step,
+    distanceToStep: distToStep,
+    remainingDuration,
+    totalDistance: route.totalDistance,
+    profile,
+  }
+
+  const pushToGlasses = (mapImage: string | null, turnArrow: string | null) => {
+    if (bridge) void displayNavStep(bridge, page, mapImage, turnArrow)
+    if (simulatorBridge && simulatorBridge !== bridge) void displayNavStep(simulatorBridge, page, mapImage, turnArrow)
+  }
+
+  // If turn arrow already cached, skip the blank intermediate render
+  const arrowKey = `${step.maneuverType}/${step.maneuverModifier}`
+  const cachedArrow = turnArrowCache.get(arrowKey) ?? null
+  if (cachedArrow && lastMapImage) {
+    pushToGlasses(lastMapImage, cachedArrow)
+  } else {
     pushToGlasses(null, null)
     void Promise.all([
       fetchMapImage(),
