@@ -143,14 +143,17 @@ export async function generateMapImage(
 
   const [t00, t10, t01, t11] = tiles.map((t) => t ?? placeholder);
 
-  // Stitch into 512×512
-  const stitched = await sharp(t00, { failOn: "none" })
-    .resize(TILE_SIZE * 2, TILE_SIZE * 2, { fit: "fill" })
+  // Stitch 4 tiles into 512×512 canvas — each tile stays 256×256
+  const stitched = await sharp({
+    create: { width: TILE_SIZE * 2, height: TILE_SIZE * 2, channels: 3, background: "#111111" },
+  })
     .composite([
+      { input: t00, left: 0,         top: 0 },
       { input: t10, left: TILE_SIZE, top: 0 },
       { input: t01, left: 0,         top: TILE_SIZE },
       { input: t11, left: TILE_SIZE, top: TILE_SIZE },
     ])
+    .png()
     .toBuffer();
 
   // Calculate crop window: W×H centered on position
