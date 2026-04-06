@@ -26,11 +26,15 @@ export interface GeocodingResult {
 
 const BACKEND = (import.meta.env.VITE_BACKEND as string | undefined) ?? 'http://localhost:3002/api'
 
+const BACKEND_HEADERS: Record<string, string> = BACKEND.includes('ngrok')
+  ? { 'ngrok-skip-browser-warning': 'true' }
+  : {}
+
 // ── Geocoding ────────────────────────────────────────────────────────
 
 export async function geocodeSuggestions(query: string): Promise<GeocodingResult[]> {
   if (query.trim().length < 2) return []
-  const res = await fetch(`${BACKEND}/geocode?q=${encodeURIComponent(query)}`)
+  const res = await fetch(`${BACKEND}/geocode?q=${encodeURIComponent(query)}`, { headers: BACKEND_HEADERS })
   if (!res.ok) throw new Error('Geocoding failed')
   const data = await res.json() as { results: GeocodingResult[] }
   return data.results
@@ -48,7 +52,7 @@ export async function fetchRoute(
     destination: `${destination[1]},${destination[0]}`,
     profile,
   })
-  const res = await fetch(`${BACKEND}/directions?${params}`)
+  const res = await fetch(`${BACKEND}/directions?${params}`, { headers: BACKEND_HEADERS })
   if (!res.ok) throw new Error('Directions request failed')
   return res.json() as Promise<Route>
 }

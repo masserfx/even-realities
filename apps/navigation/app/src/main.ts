@@ -30,6 +30,15 @@ import { createSimulatedBridge } from './simulator.ts'
 
 const BACKEND = (import.meta.env.VITE_BACKEND as string | undefined) ?? 'http://localhost:3002/api'
 
+// Add ngrok bypass header when tunneling through ngrok
+const BACKEND_HEADERS: Record<string, string> = BACKEND.includes('ngrok')
+  ? { 'ngrok-skip-browser-warning': 'true' }
+  : {}
+
+function backendFetch(url: string, init?: RequestInit): Promise<Response> {
+  return fetch(url, { ...init, headers: { ...BACKEND_HEADERS, ...(init?.headers as Record<string, string> ?? {}) } })
+}
+
 // ── State ─────────────────────────────────────────────────────────────
 
 type AppState = 'IDLE' | 'NAVIGATING' | 'ARRIVED'
@@ -382,7 +391,7 @@ async function fetchMapImage(): Promise<string | null> {
   mapFetchInProgress = true
   try {
     const [lng, lat] = currentPosition
-    const res = await fetch(`${BACKEND}/map-image`, {
+    const res = await backendFetch(`${BACKEND}/map-image`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ lat, lng, routeGeometry, heading: currentHeading }),
@@ -406,7 +415,7 @@ async function fetchTurnArrow(type: string, modifier: string): Promise<string | 
   const key = `${type}/${modifier}`
   if (turnArrowCache.has(key)) return turnArrowCache.get(key)!
   try {
-    const res = await fetch(`${BACKEND}/turn-arrow?type=${encodeURIComponent(type)}&modifier=${encodeURIComponent(modifier)}`)
+    const res = await backendFetch(`${BACKEND}/turn-arrow?type=${encodeURIComponent(type)}&modifier=${encodeURIComponent(modifier)}`)
     if (!res.ok) return null
     const data = await res.json() as { image: string }
     turnArrowCache.set(key, data.image)
@@ -608,37 +617,43 @@ bridge = simulatorBridge
 void displayIdle(bridge, 'Zadej cíl v aplikaci')
 void initGlasses()
 
-// Pre-fill manual location form with last saved position
+// Pre-fill manual location form + set currentPosition immediately from saved data
 const savedPos = loadSavedPosition()
 if (savedPos) {
+  currentPosition = savedPos
   manualLat.value = savedPos[1].toFixed(6)
   manualLng.value = savedPos[0].toFixed(6)
+  setStatus(`Poloha: uložená`)
+  updateMap()
 }
 
-// Try GPS → saved position → IP geolocation
+// Start IP geolocation immediately in parallel (don't wait for GPS to fail)
+if (!savedPos) {
+  setStatus('Zjišťuji polohu...')
+  void getLocationByIP().then((ipPos) => {
+    if (ipPos && !currentPosition) {
+      currentPosition = ipPos
+      manualLat.value = ipPos[1].toFixed(6)
+      manualLng.value = ipPos[0].toFixed(6)
+      setStatus('Poloha z IP (přibližná)')
+      updateMap()
+    }
+  })
+}
+
+// Try GPS — overwrites IP/saved position with accurate fix
 navigator.geolocation.getCurrentPosition(
   (pos) => {
     currentPosition = [pos.coords.longitude, pos.coords.latitude]
     savePosition(pos.coords.longitude, pos.coords.latitude)
+    setStatus('GPS OK')
     updateMap()
-  },
-  async () => {
-    // GPS failed — try saved position first, then IP geolocation
-    if (savedPos) {
-      currentPosition = savedPos
-      setStatus(`Poloha: uložená (${savedPos[1].toFixed(4)}, ${savedPos[0].toFixed(4)})`)
-      updateMap()
-      return
-    }
-    setStatus('Zjišťuji polohu...')
-    const ipPos = await getLocationByIP()
-    if (ipPos) {
-      currentPosition = ipPos
-      manualLat.value = ipPos[1].toFixed(6)
-      manualLng.value = ipPos[0].toFixed(6)
-      setStatus(`Poloha z IP (přibližná)`)
-      updateMap()
+    if (pendingDestination) {
+      const dest = pendingDestination
+      pendingDestination = null
+      void startNavigation(dest)
     }
   },
+  () => { /* silent — already have savedPos or IP fallback */ },
   { enableHighAccuracy: false, timeout: 8000, maximumAge: 30000 }
 )
