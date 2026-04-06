@@ -13,7 +13,7 @@
       "name": "network",
       "desc": "Navigation requires network access for routing, geocoding and map tiles",
       "whitelist": [
-        "91.99.126.53:3002"
+        "5ab4-81-201-59-147.ngrok-free.app"
       ]
     },
     {
@@ -22,7 +22,6 @@
     }
   ],
   "supported_languages": [
-    "en",
-    "cs"
+    "en"
   ]
 }

@@ -1,31 +1,27 @@
 {
-  "package_id": "com.translator.g2",
+  "package_id": "com.hradev.translator",
   "edition": "202601",
   "name": "G2 Translator",
   "version": "0.1.0",
+  "description": "Real-time speech translation and AI chat with G2 glasses display",
+  "author": "leos@hradev.cz",
   "min_app_version": "2.0.0",
-  "min_sdk_version": "0.0.7",
+  "min_sdk_version": "0.0.9",
   "entrypoint": "index.html",
   "permissions": [
     {
       "name": "network",
-      "desc": "This app needs network access to send audio for translation",
+      "desc": "Translator requires network access for speech transcription, translation and AI chat via OpenAI API",
       "whitelist": [
-        "http://localhost:3001"
+        "5ab4-81-201-59-147.ngrok-free.app"
       ]
     },
     {
-      "name": "microphone",
-      "desc": "This app needs microphone access to capture speech for translation"
+      "name": "g2-microphone",
+      "desc": "Microphone access is required to capture speech for transcription and translation"
     }
   ],
   "supported_languages": [
-    "en",
-    "cs",
-    "de",
-    "fr",
-    "es",
-    "ja",
-    "zh"
+    "en"
   ]
 }
