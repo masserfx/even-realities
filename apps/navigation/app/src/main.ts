@@ -503,14 +503,14 @@ async function initGlasses(): Promise<void> {
     setTimeout(() => reject(new Error('no-bridge')), 3000)
   )
   try {
-    bridge = await Promise.race([waitForEvenAppBridge(), timeout])
+    const realBridge = await Promise.race([waitForEvenAppBridge(), timeout])
+    bridge = realBridge  // replace simulator with real glasses
     bridge.onEvenHubEvent((event: EvenHubEvent) => handleGlassesEvent(event))
     await bridge.imuControl(true, ImuReportPace.P500)
     void displayIdle(bridge, 'Zadej cíl v aplikaci')
   } catch {
-    console.info('Glasses not connected — using browser simulator')
-    bridge = createSimulatedBridge()
-    void displayIdle(bridge, 'Zadej cíl v aplikaci')
+    console.info('No glasses detected — simulator active')
+    // bridge is already set to simulator, keep it
   }
 }
 
@@ -560,6 +560,10 @@ async function getLocationByIP(): Promise<[number, number] | null> {
 showPanel('search')
 setStatus('Připraven')
 initMap()
+
+// Simulator always starts immediately — replaced by real bridge if glasses connect
+bridge = createSimulatedBridge()
+void displayIdle(bridge, 'Zadej cíl v aplikaci')
 void initGlasses()
 
 // Pre-fill manual location form with last saved position
