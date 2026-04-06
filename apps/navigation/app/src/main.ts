@@ -40,6 +40,7 @@ let route: Route | null = null
 let stepIndex = 0
 let destination: [number, number] | null = null  // [lng, lat]
 let bridge: EvenAppBridge | null = null
+let simulatorBridge: EvenAppBridge | null = null  // always alive, mirrors real bridge
 let watchId: number | null = null
 let currentPosition: [number, number] | null = null  // [lng, lat]
 let suggestionDebounce: ReturnType<typeof setTimeout> | null = null
@@ -244,6 +245,7 @@ function stopNavigation(): void {
   showPanel('search')
   setStatus('Připraven')
   if (bridge) void displayIdle(bridge, 'Zadej cíl v aplikaci')
+  if (simulatorBridge && simulatorBridge !== bridge) void displayIdle(simulatorBridge, 'Zadej cíl v aplikaci')
 }
 
 // ── GPS & navigation loop ─────────────────────────────────────────────
@@ -405,7 +407,7 @@ function updateNavDisplay(): void {
   navEta.textContent = formatDuration(remainingDuration)
   updateMap()
 
-  if (bridge) {
+  if (bridge ?? simulatorBridge) {
     const page: GlassesNavPage = {
       step,
       distanceToStep: distToStep,
@@ -413,13 +415,18 @@ function updateNavDisplay(): void {
       totalDistance: route.totalDistance,
       profile,
     }
+    // Helper: send to real bridge + always mirror to simulator
+    const pushToGlasses = (mapImage: string | null, turnArrow: string | null) => {
+      if (bridge) void displayNavStep(bridge, page, mapImage, turnArrow)
+      if (simulatorBridge && simulatorBridge !== bridge) void displayNavStep(simulatorBridge, page, mapImage, turnArrow)
+    }
     // Show text immediately, images fill in when server responds
-    void displayNavStep(bridge, page, null, null)
+    pushToGlasses(null, null)
     void Promise.all([
       fetchMapImage(),
       fetchTurnArrow(step.maneuverType, step.maneuverModifier),
     ]).then(([mapImage, turnArrow]) => {
-      if (bridge && (mapImage ?? turnArrow)) void displayNavStep(bridge, page, mapImage, turnArrow)
+      if (mapImage ?? turnArrow) pushToGlasses(mapImage, turnArrow)
     })
   }
 }
@@ -444,6 +451,7 @@ function handleArrived(): void {
   showPanel('arrived')
   setStatus('Jsi v cíli!')
   if (bridge) void displayArrived(bridge)
+  if (simulatorBridge && simulatorBridge !== bridge) void displayArrived(simulatorBridge)
   setTimeout(() => stopNavigation(), 5000)
 }
 
@@ -506,10 +514,11 @@ async function initGlasses(): Promise<void> {
   )
   try {
     const realBridge = await Promise.race([waitForEvenAppBridge(), timeout])
-    bridge = realBridge  // replace simulator with real glasses
+    bridge = realBridge  // replace simulator with real glasses (simulator stays as mirror)
     bridge.onEvenHubEvent((event: EvenHubEvent) => handleGlassesEvent(event))
     await bridge.imuControl(true, ImuReportPace.P500)
     void displayIdle(bridge, 'Zadej cíl v aplikaci')
+    if (simulatorBridge) void displayIdle(simulatorBridge, 'Zadej cíl v aplikaci')
   } catch {
     console.info('No glasses detected — simulator active')
     // bridge is already set to simulator, keep it
@@ -563,8 +572,9 @@ showPanel('search')
 setStatus('Připraven')
 initMap()
 
-// Simulator always starts immediately — replaced by real bridge if glasses connect
-bridge = createSimulatedBridge()
+// Simulator always starts immediately — real bridge layered on top if glasses connect
+simulatorBridge = createSimulatedBridge()
+bridge = simulatorBridge
 void displayIdle(bridge, 'Zadej cíl v aplikaci')
 void initGlasses()
 
