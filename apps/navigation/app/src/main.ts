@@ -499,8 +499,11 @@ async function startNavigation(dest: [number, number]): Promise<void> {
 // ── Even Hub SDK ──────────────────────────────────────────────────────
 
 async function initGlasses(): Promise<void> {
+  const timeout = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error('no-bridge')), 3000)
+  )
   try {
-    bridge = await waitForEvenAppBridge()
+    bridge = await Promise.race([waitForEvenAppBridge(), timeout])
     bridge.onEvenHubEvent((event: EvenHubEvent) => handleGlassesEvent(event))
     await bridge.imuControl(true, ImuReportPace.P500)
     void displayIdle(bridge, 'Zadej cíl v aplikaci')
